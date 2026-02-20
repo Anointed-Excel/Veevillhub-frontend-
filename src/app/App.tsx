@@ -2,8 +2,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
 import { Toaster } from '@/app/components/ui/sonner';
-import { initializeMockData } from '@/data/mockData';
-import { useEffect } from 'react';
 
 // Auth pages
 import LandingPage from '@/app/pages/LandingPage';
@@ -144,10 +142,6 @@ function AppRoutes() {
 }
 
 export default function App() {
-  useEffect(() => {
-    initializeMockData();
-  }, []);
-
   return (
     <Router>
       <AuthProvider>

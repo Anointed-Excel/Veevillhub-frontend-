@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { api, ApiError } from '@/lib/api';
+import { token } from '@/lib/token';
 
 export type UserRole = 'brand' | 'manufacturer' | 'retailer' | 'buyer';
-
 export type VerificationStatus = 'pending' | 'approved' | 'rejected';
 
 export interface User {
@@ -14,6 +15,14 @@ export interface User {
   avatar?: string;
 }
 
+export interface SignupData {
+  email: string;
+  password: string;
+  name: string;
+  phone?: string;
+  role: UserRole;
+}
+
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
@@ -22,97 +31,138 @@ interface AuthContextType {
   isAuthenticated: boolean;
 }
 
-export interface SignupData {
+// ── Backend response shapes ───────────────────────────────────────────────────
+
+interface BackendTokens {
+  access: { token: string };
+  refresh: { token: string };
+}
+
+interface BackendUser {
+  id: string;
+  full_name: string;
   email: string;
-  password: string;
-  name: string;
-  role: UserRole;
-  documents?: {
-    cac?: File;
-    tin?: File;
-    nin?: File;
-    proofOfAddress?: File;
-    selfie?: File;
+  phone_number?: string;
+  is_verified?: boolean;
+  status?: string;
+}
+
+interface BackendAdmin {
+  id: string;
+  full_name: string;
+  business_email: string;
+  company_name?: string;
+  role: string;
+  status?: string;
+}
+
+// ── Normalizers ───────────────────────────────────────────────────────────────
+
+function normalizeUser(u: BackendUser): User {
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.full_name,
+    role: 'buyer',
+    verificationStatus: 'approved',
+    avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(u.full_name)}&background=BE220E&color=fff`,
   };
 }
+
+function normalizeAdmin(a: BackendAdmin): User {
+  return {
+    id: a.id,
+    email: a.business_email,
+    name: a.full_name,
+    role: 'brand',
+    verificationStatus: 'approved',
+    avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(a.full_name)}&background=BE220E&color=fff`,
+  };
+}
+
+// ── Context ───────────────────────────────────────────────────────────────────
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
+  // Restore session from stored user on mount
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
+    const stored = localStorage.getItem('user');
+    if (stored && token.getAccess()) {
+      try {
+        setUser(JSON.parse(stored));
+      } catch {
+        localStorage.removeItem('user');
+      }
     }
   }, []);
 
   const login = async (email: string, password: string) => {
-    // Mock login - check localStorage for users
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const foundUser = users.find((u: any) => u.email === email && u.password === password);
-    
-    if (foundUser) {
-      const { password, ...userWithoutPassword } = foundUser;
-      setUser(userWithoutPassword);
-      localStorage.setItem('user', JSON.stringify(userWithoutPassword));
-    } else {
-      throw new Error('Invalid credentials');
+    // Try buyer login first, then admin login
+    let normalizedUser: User;
+    let tokens: BackendTokens;
+
+    try {
+      const res = await api.post<{ user: BackendUser; tokens: BackendTokens }>(
+        '/users/login',
+        { email, password },
+      );
+      normalizedUser = normalizeUser(res.data.user);
+      tokens = res.data.tokens;
+      token.set(tokens.access.token, tokens.refresh.token, 'user');
+    } catch (userErr) {
+      // If user login fails, attempt admin login
+      try {
+        const res = await api.post<{ admin: BackendAdmin; tokens: BackendTokens }>(
+          '/admin/login',
+          { email, password },
+        );
+        normalizedUser = normalizeAdmin(res.data.admin);
+        tokens = res.data.tokens;
+        token.set(tokens.access.token, tokens.refresh.token, 'admin');
+      } catch {
+        // Surface the original error message if both fail
+        const msg = userErr instanceof ApiError ? userErr.message : 'Invalid email or password';
+        throw new Error(msg);
+      }
     }
+
+    setUser(normalizedUser);
+    localStorage.setItem('user', JSON.stringify(normalizedUser));
   };
 
   const logout = () => {
     setUser(null);
+    token.clearTokens();
     localStorage.removeItem('user');
   };
 
   const signup = async (data: SignupData) => {
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    
-    // Check if user already exists
-    if (users.find((u: any) => u.email === data.email)) {
-      throw new Error('User already exists');
+    // Only buyer self-registration is supported via API
+    if (data.role !== 'buyer') {
+      throw new Error('Only buyer accounts can self-register');
     }
 
-    const newUser = {
-      id: Date.now().toString(),
+    await api.post('/users/register', {
+      full_name: data.name,
       email: data.email,
+      phone_number: data.phone ?? '',
       password: data.password,
-      name: data.name,
-      role: data.role,
-      verificationStatus: data.role === 'buyer' ? 'approved' : 'pending',
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name)}&background=BE220E&color=fff`,
-    };
-
-    users.push(newUser);
-    localStorage.setItem('users', JSON.stringify(users));
-
-    // Auto-login for buyers
-    if (data.role === 'buyer') {
-      const { password, ...userWithoutPassword } = newUser;
-      setUser(userWithoutPassword);
-      localStorage.setItem('user', JSON.stringify(userWithoutPassword));
-    }
+    });
+    // Registration triggers an OTP email — caller handles next step
   };
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      login,
-      logout,
-      signup,
-      isAuthenticated: !!user,
-    }}>
+    <AuthContext.Provider value={{ user, login, logout, signup, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
 }
