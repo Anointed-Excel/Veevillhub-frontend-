@@ -1,141 +1,91 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ElementType } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
+import { api } from '@/lib/api';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import { Input } from '@/app/components/ui/input';
 import {
-  Home,
-  ShoppingCart,
-  Package,
-  User,
-  Heart,
-  Search,
-  Star,
-  TrendingUp,
-  Sparkles,
-  ArrowLeft,
-  Monitor,
-  Shirt,
-  Sofa,
-  Dumbbell,
-  Smartphone,
-  Watch,
-  Headphones,
-  Camera,
-  Laptop,
-  Tv,
-  GameController,
+  Home, ShoppingCart, Package, User, Heart, Search,
+  Star, TrendingUp, Sparkles, ArrowLeft, Monitor, Sofa,
+  Dumbbell, Smartphone, Watch, Headphones, Shirt, Grid, Loader2,
 } from 'lucide-react';
 
 interface Category {
   id: string;
   name: string;
   description: string;
-  icon: any;
-  productCount: number;
+  icon: ElementType;
   image: string;
-  subcategories: string[];
 }
 
-const categories: Category[] = [
-  {
-    id: 'electronics',
-    name: 'Electronics',
-    description: 'Latest gadgets and tech devices',
-    icon: Monitor,
-    productCount: 1234,
-    image: 'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=800',
-    subcategories: ['Smartphones', 'Laptops', 'Tablets', 'Accessories', 'Audio', 'Cameras'],
-  },
-  {
-    id: 'fashion',
-    name: 'Fashion',
-    description: 'Trending styles and accessories',
-    icon: Sparkles,
-    productCount: 2456,
-    image: 'https://images.unsplash.com/photo-1445205170230-053b83016050?w=800',
-    subcategories: ["Men's Wear", "Women's Wear", 'Shoes', 'Bags', 'Jewelry', 'Accessories'],
-  },
-  {
-    id: 'home',
-    name: 'Home & Living',
-    description: 'Furniture and home decor',
-    icon: Sofa,
-    productCount: 987,
-    image: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=800',
-    subcategories: ['Furniture', 'Decor', 'Kitchen', 'Bedding', 'Storage', 'Lighting'],
-  },
-  {
-    id: 'beauty',
-    name: 'Beauty & Personal Care',
-    description: 'Cosmetics and skincare',
-    icon: Star,
-    productCount: 1543,
-    image: 'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=800',
-    subcategories: ['Skincare', 'Makeup', 'Hair Care', 'Fragrance', 'Bath & Body', 'Tools'],
-  },
-  {
-    id: 'sports',
-    name: 'Sports & Fitness',
-    description: 'Gear for active lifestyle',
-    icon: Dumbbell,
-    productCount: 765,
-    image: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800',
-    subcategories: ['Equipment', 'Apparel', 'Shoes', 'Supplements', 'Accessories', 'Outdoor'],
-  },
-  {
-    id: 'phones',
-    name: 'Phones & Tablets',
-    description: 'Mobile devices and accessories',
-    icon: Smartphone,
-    productCount: 892,
-    image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800',
-    subcategories: ['Smartphones', 'Feature Phones', 'Tablets', 'Cases', 'Chargers', 'Screen Protectors'],
-  },
-  {
-    id: 'watches',
-    name: 'Watches',
-    description: 'Timepieces and smartwatches',
-    icon: Watch,
-    productCount: 543,
-    image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800',
-    subcategories: ['Smartwatches', 'Luxury Watches', 'Fashion Watches', 'Sports Watches', 'Straps', 'Accessories'],
-  },
-  {
-    id: 'audio',
-    name: 'Audio & Headphones',
-    description: 'Sound systems and accessories',
-    icon: Headphones,
-    productCount: 678,
-    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800',
-    subcategories: ['Headphones', 'Earbuds', 'Speakers', 'Sound Bars', 'Amplifiers', 'Accessories'],
-  },
-];
+// Fallback visuals matched by keyword in category name
+const getCategoryVisual = (name: string): { icon: React.ElementType; image: string; description: string } => {
+  const n = name.toLowerCase();
+  if (n.includes('electron') || n.includes('tech') || n.includes('gadget'))
+    return { icon: Monitor, image: 'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=800', description: 'Latest gadgets and tech devices' };
+  if (n.includes('fashion') || n.includes('cloth') || n.includes('wear') || n.includes('apparel'))
+    return { icon: Shirt, image: 'https://images.unsplash.com/photo-1445205170230-053b83016050?w=800', description: 'Trending styles and accessories' };
+  if (n.includes('home') || n.includes('living') || n.includes('furniture') || n.includes('decor'))
+    return { icon: Sofa, image: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=800', description: 'Furniture and home decor' };
+  if (n.includes('beauty') || n.includes('care') || n.includes('cosmet') || n.includes('skin'))
+    return { icon: Star, image: 'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=800', description: 'Cosmetics and skincare' };
+  if (n.includes('sport') || n.includes('fitness') || n.includes('gym'))
+    return { icon: Dumbbell, image: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800', description: 'Gear for an active lifestyle' };
+  if (n.includes('phone') || n.includes('mobile') || n.includes('tablet'))
+    return { icon: Smartphone, image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800', description: 'Mobile devices and accessories' };
+  if (n.includes('watch') || n.includes('timepiece'))
+    return { icon: Watch, image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800', description: 'Timepieces and smartwatches' };
+  if (n.includes('audio') || n.includes('headphone') || n.includes('speaker') || n.includes('sound'))
+    return { icon: Headphones, image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800', description: 'Sound systems and accessories' };
+  // Generic fallback
+  return { icon: Grid, image: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=800', description: `Browse our ${name} collection` };
+};
 
 export default function BuyerCategories() {
   const navigate = useNavigate();
   const { cartCount, wishlistCount } = useCart();
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredCategories, setFilteredCategories] = useState(categories);
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
+  const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Load real categories from API
+  useEffect(() => {
+    setLoading(true);
+    api.get<unknown>('/shop/categories').then((res) => {
+      const data = res.data as Record<string, unknown>;
+      const raw = (data.categories || []) as Record<string, unknown>[];
+      const mapped: Category[] = raw.map((c) => {
+        const visual = getCategoryVisual((c.name as string) || '');
+        return {
+          id: c.id as string,
+          name: (c.name as string) || '',
+          description: visual.description,
+          icon: visual.icon,
+          image: visual.image,
+        };
+      });
+      setAllCategories(mapped);
+      setFilteredCategories(mapped);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
     if (searchQuery) {
-      const filtered = categories.filter(
-        (cat) =>
+      setFilteredCategories(
+        allCategories.filter((cat) =>
           cat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          cat.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          cat.subcategories.some((sub) => sub.toLowerCase().includes(searchQuery.toLowerCase()))
+          cat.description.toLowerCase().includes(searchQuery.toLowerCase())
+        )
       );
-      setFilteredCategories(filtered);
     } else {
-      setFilteredCategories(categories);
+      setFilteredCategories(allCategories);
     }
-  }, [searchQuery]);
+  }, [searchQuery, allCategories]);
 
   const handleCategoryClick = (categoryId: string) => {
-    // Navigate to home with category filter
-    navigate(`/buyer?category=${categoryId}`);
+    navigate(`/buyer/shop?category_id=${categoryId}`);
   };
 
   return (
@@ -202,15 +152,16 @@ export default function BuyerCategories() {
         </div>
 
         {/* Categories Grid */}
-        {filteredCategories.length === 0 ? (
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <Loader2 className="w-10 h-10 animate-spin text-[#BE220E]" />
+          </div>
+        ) : filteredCategories.length === 0 ? (
           <Card className="p-12 text-center">
             <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-xl font-semibold mb-2">No categories found</h3>
             <p className="text-gray-600 mb-4">Try a different search term</p>
-            <Button
-              onClick={() => setSearchQuery('')}
-              className="bg-[#BE220E] hover:bg-[#9a1b0b]"
-            >
+            <Button onClick={() => setSearchQuery('')} className="bg-[#BE220E] hover:bg-[#9a1b0b]">
               Clear Search
             </Button>
           </Card>
@@ -224,14 +175,14 @@ export default function BuyerCategories() {
                   className="overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer group"
                   onClick={() => handleCategoryClick(category.id)}
                 >
-                  {/* Category Image */}
                   <div className="relative h-40 overflow-hidden bg-gray-100">
                     <img
                       src={category.image}
                       alt={category.name}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                      onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.png'; }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                     <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm p-2 rounded-lg">
                       <Icon className="w-6 h-6 text-[#BE220E]" />
                     </div>
@@ -239,38 +190,10 @@ export default function BuyerCategories() {
                       <h3 className="text-xl font-bold">{category.name}</h3>
                     </div>
                   </div>
-
-                  {/* Category Info */}
                   <div className="p-4">
                     <p className="text-sm text-gray-600 mb-3">{category.description}</p>
-
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs text-gray-500">
-                        {category.productCount.toLocaleString()} products
-                      </span>
-                      <span className="text-xs font-semibold text-[#BE220E]">
-                        Shop Now →
-                      </span>
-                    </div>
-
-                    {/* Subcategories */}
-                    <div className="border-t border-gray-200 pt-3">
-                      <p className="text-xs font-medium text-gray-700 mb-2">Popular:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {category.subcategories.slice(0, 3).map((sub, index) => (
-                          <span
-                            key={index}
-                            className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded"
-                          >
-                            {sub}
-                          </span>
-                        ))}
-                        {category.subcategories.length > 3 && (
-                          <span className="text-xs text-gray-500 px-2 py-1">
-                            +{category.subcategories.length - 3} more
-                          </span>
-                        )}
-                      </div>
+                    <div className="flex items-center justify-end">
+                      <span className="text-xs font-semibold text-[#BE220E]">Shop Now →</span>
                     </div>
                   </div>
                 </Card>

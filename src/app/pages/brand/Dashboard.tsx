@@ -8,22 +8,53 @@ import { api } from '@/lib/api';
 
 export default function BrandDashboard() {
   const [totalUsers, setTotalUsers] = useState<number | null>(null);
+  const [buyersCount, setBuyersCount] = useState<number | null>(null);
+  const [ordersCount, setOrdersCount] = useState<number | null>(null);
+  const [productsCount, setProductsCount] = useState<number | null>(null);
 
   useEffect(() => {
-    api.get<{ totalUsers: number }>('/admin/dashboard/total-users')
-      .then((res) => setTotalUsers(res.data.totalUsers))
+    // Total users
+    api.get<unknown>('/admin/dashboard/total-users')
+      .then((res) => setTotalUsers((res.data as Record<string, unknown>).totalUsers as number))
       .catch(() => {});
+
+    // Buyers count via pagination total
+    api.get<unknown>('/admin/buyers?limit=1')
+      .then((res) => {
+        const d = res.data as Record<string, unknown>;
+        const pagination = d.pagination as Record<string, unknown> | undefined;
+        setBuyersCount(pagination?.total as number ?? (d.buyers as unknown[])?.length ?? null);
+      }).catch(() => {});
+
+    // Orders count
+    api.get<unknown>('/admin/orders?limit=1')
+      .then((res) => {
+        const d = res.data as Record<string, unknown>;
+        const pagination = d.pagination as Record<string, unknown> | undefined;
+        setOrdersCount(pagination?.total as number ?? (d.orders as unknown[])?.length ?? null);
+      }).catch(() => {});
+
+    // Products count
+    api.get<unknown>('/products?limit=1')
+      .then((res) => {
+        const d = res.data as Record<string, unknown>;
+        const pagination = d.pagination as Record<string, unknown> | undefined;
+        setProductsCount(pagination?.total as number ?? (d.products as unknown[])?.length ?? null);
+      }).catch(() => {});
   }, []);
 
+  const fmt = (val: number | null, fallback = '—') =>
+    val !== null ? val.toLocaleString() : fallback;
+
   const stats = [
-    { label: 'Total Users', value: totalUsers !== null ? totalUsers.toLocaleString() : '—', icon: Users, color: '#BE220E', change: '', link: '/brand/users' },
-    { label: 'Manufacturers', value: '156', icon: Building2, color: '#059669', change: '+8%', link: '/brand/manufacturers' },
-    { label: 'Retailers', value: '892', icon: Store, color: '#2563EB', change: '+15%', link: '/brand/retailers' },
-    { label: 'Buyers', value: '1,799', icon: ShoppingBag, color: '#7C3AED', change: '+23%', link: '/brand/buyers' },
-    { label: 'Total Products', value: '3,452', icon: Package, color: '#EA580C', change: '+18%', link: '/brand/products' },
-    { label: 'Total Orders', value: '12,890', icon: ShoppingCart, color: '#0891B2', change: '+27%', link: '/brand/orders' },
-    { label: 'Revenue', value: '$485,678', icon: DollarSign, color: '#16A34A', change: '+31%', link: '/brand/wallet' },
-    { label: 'Growth Rate', value: '24.5%', icon: TrendingUp, color: '#BE220E', change: '+5%', link: '/brand/analytics' },
+    { label: 'Total Users', value: fmt(totalUsers), icon: Users, color: '#BE220E', change: '', link: '/brand/users' },
+    { label: 'Manufacturers', value: '—', icon: Building2, color: '#059669', change: '', link: '/brand/manufacturers' },
+    { label: 'Retailers', value: '—', icon: Store, color: '#2563EB', change: '', link: '/brand/retailers' },
+    { label: 'Buyers', value: fmt(buyersCount), icon: ShoppingBag, color: '#7C3AED', change: '', link: '/brand/buyers' },
+    { label: 'Total Products', value: fmt(productsCount), icon: Package, color: '#EA580C', change: '', link: '/brand/products' },
+    { label: 'Total Orders', value: fmt(ordersCount), icon: ShoppingCart, color: '#0891B2', change: '', link: '/brand/orders' },
+    { label: 'Revenue', value: '—', icon: DollarSign, color: '#16A34A', change: '', link: '/brand/wallet' },
+    { label: 'Growth Rate', value: '—', icon: TrendingUp, color: '#BE220E', change: '', link: '/brand/analytics' },
   ];
 
   const recentActivities = [
