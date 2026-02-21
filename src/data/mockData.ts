@@ -6,12 +6,12 @@ export const initializeMockData = () => {
   const defaultUsers = [
     {
       id: '1',
-      email: 'admin@veevillhub.com', // CORRECT EMAIL
+      email: 'admin@anointed.com', // CORRECT EMAIL
       password: 'admin123',
-      name: 'VeeVill Admin',
+      name: 'Anointed Admin',
       role: 'brand',
       verificationStatus: 'approved',
-      avatar: 'https://ui-avatars.com/api/?name=VeeVill+Admin&background=BE220E&color=fff',
+      avatar: 'https://ui-avatars.com/api/?name=Anointed+Admin&background=BE220E&color=fff',
     },
     {
       id: '2',
@@ -44,7 +44,7 @@ export const initializeMockData = () => {
 
   // FORCE UPDATE: Remove any old admin with wrong email
   const filteredUsers = existingUsers.filter((u: any) => 
-    u.id !== '1' && u.email !== 'admin@veevill.com' // Remove old admin
+    u.id !== '1' && u.email !== 'admin@anointed.com' // Remove old admin
   );
 
   // Add all default users (admin will always be fresh)
@@ -105,7 +105,7 @@ export const initializeMockData = () => {
         images: ['https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=500'],
         category: 'Food & Beverage',
         manufacturerId: '1',
-        manufacturerName: 'VeeVill Admin',
+        manufacturerName: 'Anointed Admin',
       },
     ];
     localStorage.setItem('products', JSON.stringify(products));

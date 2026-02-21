@@ -289,7 +289,7 @@ export default function RetailerSettings() {
                           className="pl-10"
                         />
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">veevillhub.com/{storeSettings.storeUrl}</p>
+                      <p className="text-xs text-gray-500 mt-1">anointed.com/{storeSettings.storeUrl}</p>
                     </div>
 
                     <div>

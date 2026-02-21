@@ -69,10 +69,10 @@ export default function BrandAnalytics() {
   ];
 
   const topSellingProducts = [
-    { name: 'VeeVill Premium Rice', sold: 4523, revenue: 207908, growth: 34 },
+    { name: 'Anointed Premium Rice', sold: 4523, revenue: 207908, growth: 34 },
     { name: 'Golden Pasta Spaghetti', sold: 3821, revenue: 49633, growth: 28 },
     { name: 'African Print Fabric', sold: 2156, revenue: 193964, growth: 22 },
-    { name: 'VeeVill Cooking Oil', sold: 2890, revenue: 67915, growth: 19 },
+    { name: 'Anointed Cooking Oil', sold: 2890, revenue: 67915, growth: 19 },
     { name: 'Artisan Coffee Beans', sold: 1934, revenue: 30924, growth: 15 },
   ];
 

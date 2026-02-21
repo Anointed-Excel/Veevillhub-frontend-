@@ -1,12 +1,22 @@
+import { useEffect, useState } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Users, Building2, Store, ShoppingBag, Package, ShoppingCart, TrendingUp, DollarSign, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { api } from '@/lib/api';
 
 export default function BrandDashboard() {
+  const [totalUsers, setTotalUsers] = useState<number | null>(null);
+
+  useEffect(() => {
+    api.get<{ totalUsers: number }>('/admin/dashboard/total-users')
+      .then((res) => setTotalUsers(res.data.totalUsers))
+      .catch(() => {});
+  }, []);
+
   const stats = [
-    { label: 'Total Users', value: '2,847', icon: Users, color: '#BE220E', change: '+12%', link: '/brand/users' },
+    { label: 'Total Users', value: totalUsers !== null ? totalUsers.toLocaleString() : '—', icon: Users, color: '#BE220E', change: '', link: '/brand/users' },
     { label: 'Manufacturers', value: '156', icon: Building2, color: '#059669', change: '+8%', link: '/brand/manufacturers' },
     { label: 'Retailers', value: '892', icon: Store, color: '#2563EB', change: '+15%', link: '/brand/retailers' },
     { label: 'Buyers', value: '1,799', icon: ShoppingBag, color: '#7C3AED', change: '+23%', link: '/brand/buyers' },

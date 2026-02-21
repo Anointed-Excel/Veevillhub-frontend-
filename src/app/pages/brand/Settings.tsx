@@ -9,8 +9,8 @@ import { toast } from 'sonner';
 
 export default function BrandSettings() {
   const [settings, setSettings] = useState({
-    platformName: 'VeeVill Hub',
-    platformEmail: 'support@veevillhub.com',
+    platformName: 'Anointed',
+    platformEmail: 'support@anointed.com',
     commissionRate: '10',
     minWithdrawal: '1000',
     currency: 'NGN',

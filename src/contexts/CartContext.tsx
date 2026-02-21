@@ -1,135 +1,197 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { api, ApiError } from '@/lib/api';
+import { token } from '@/lib/token';
+import { toast } from 'sonner';
 
 interface CartItem {
-  id: string;
+  id: string;          // cart item UUID from backend
   productId: string;
   name: string;
   price: number;
   quantity: number;
   image: string;
-  retailerId: string;
-  retailerName: string;
-  variant?: string;
+  moq: number;
 }
 
 interface WishlistItem {
-  id: string;
+  id: string;          // wishlist item UUID from backend
   productId: string;
   name: string;
   price: number;
   image: string;
-  retailerId: string;
-  retailerName: string;
 }
 
 interface CartContextType {
   cartItems: CartItem[];
   wishlistItems: WishlistItem[];
-  addToCart: (item: Omit<CartItem, 'id'>) => void;
-  removeFromCart: (id: string) => void;
-  updateCartItemQuantity: (id: string, quantity: number) => void;
+  addToCart: (productId: string, quantity?: number) => Promise<void>;
+  removeFromCart: (cartItemId: string) => Promise<void>;
+  updateCartItemQuantity: (cartItemId: string, quantity: number) => Promise<void>;
   clearCart: () => void;
-  addToWishlist: (item: Omit<WishlistItem, 'id'>) => void;
-  removeFromWishlist: (id: string) => void;
-  moveToCart: (wishlistItemId: string) => void;
+  addToWishlist: (productId: string) => Promise<void>;
+  removeFromWishlist: (wishlistItemId: string) => Promise<void>;
+  moveToCart: (wishlistItemId: string) => Promise<void>;
   cartTotal: number;
   cartCount: number;
   wishlistCount: number;
+  refreshCart: () => Promise<void>;
+  refreshWishlist: () => Promise<void>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
+function isAuthenticated(): boolean {
+  return !!token.getAccess() && token.getUserType() === 'user';
+}
+
+function normalizeCartItem(raw: Record<string, unknown>): CartItem {
+  const product = (raw.product || {}) as Record<string, unknown>;
+  return {
+    id: raw.id as string,
+    productId: (raw.product_id as string) || (product.id as string) || '',
+    name: (product.name as string) || '',
+    price: Number(product.sales_price || product.regular_price) || 0,
+    quantity: Number(raw.quantity) || 1,
+    image: (product.image_url as string) || '',
+    moq: Number(product.moq) || 1,
+  };
+}
+
+function normalizeWishlistItem(raw: Record<string, unknown>): WishlistItem {
+  const product = (raw.product || {}) as Record<string, unknown>;
+  return {
+    id: raw.id as string,
+    productId: (raw.product_id as string) || (product.id as string) || '',
+    name: (product.name as string) || '',
+    price: Number(product.sales_price || product.regular_price) || 0,
+    image: (product.image_url as string) || '',
+  };
+}
+
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
-    const saved = localStorage.getItem('veevillhub_cart');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [wishlistItems, setWishlistItems] = useState<WishlistItem[]>([]);
 
-  const [wishlistItems, setWishlistItems] = useState<WishlistItem[]>(() => {
-    const saved = localStorage.getItem('veevillhub_wishlist');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const refreshCart = useCallback(async () => {
+    if (!isAuthenticated()) return;
+    try {
+      const res = await api.get<unknown>('/cart');
+      const data = res.data as Record<string, unknown>;
+      const raw = (data.items || []) as Record<string, unknown>[];
+      setCartItems(raw.map(normalizeCartItem));
+    } catch {
+      // silently fail — cart may just be empty
+    }
+  }, []);
+
+  const refreshWishlist = useCallback(async () => {
+    if (!isAuthenticated()) return;
+    try {
+      const res = await api.get<unknown>('/wishlist');
+      const data = res.data as Record<string, unknown>;
+      const raw = (data.items || []) as Record<string, unknown>[];
+      setWishlistItems(raw.map(normalizeWishlistItem));
+    } catch {
+      // silently fail
+    }
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem('veevillhub_cart', JSON.stringify(cartItems));
-  }, [cartItems]);
+    if (isAuthenticated()) {
+      refreshCart();
+      refreshWishlist();
+    }
+  }, [refreshCart, refreshWishlist]);
 
-  useEffect(() => {
-    localStorage.setItem('veevillhub_wishlist', JSON.stringify(wishlistItems));
-  }, [wishlistItems]);
-
-  const addToCart = (item: Omit<CartItem, 'id'>) => {
-    setCartItems((prev) => {
-      const existingItem = prev.find(
-        (i) => i.productId === item.productId && i.variant === item.variant
-      );
-
-      if (existingItem) {
-        return prev.map((i) =>
-          i.id === existingItem.id
-            ? { ...i, quantity: i.quantity + item.quantity }
-            : i
-        );
-      }
-
-      return [...prev, { ...item, id: Date.now().toString() + Math.random() }];
-    });
-  };
-
-  const removeFromCart = (id: string) => {
-    setCartItems((prev) => prev.filter((item) => item.id !== id));
-  };
-
-  const updateCartItemQuantity = (id: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(id);
+  const addToCart = async (productId: string, quantity = 1) => {
+    if (!isAuthenticated()) {
+      toast.error('Please log in to add items to cart');
       return;
     }
+    try {
+      await api.post('/cart', { productId, quantity });
+      await refreshCart();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to add to cart');
+      throw err;
+    }
+  };
 
-    setCartItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, quantity } : item))
-    );
+  const removeFromCart = async (cartItemId: string) => {
+    if (!isAuthenticated()) return;
+    try {
+      await api.delete(`/cart/${cartItemId}`);
+      setCartItems((prev) => prev.filter((i) => i.id !== cartItemId));
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to remove from cart');
+      throw err;
+    }
+  };
+
+  const updateCartItemQuantity = async (cartItemId: string, quantity: number) => {
+    if (!isAuthenticated()) return;
+    if (quantity <= 0) {
+      await removeFromCart(cartItemId);
+      return;
+    }
+    try {
+      await api.patch(`/cart/${cartItemId}`, { quantity });
+      setCartItems((prev) => prev.map((i) => i.id === cartItemId ? { ...i, quantity } : i));
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to update quantity');
+      throw err;
+    }
   };
 
   const clearCart = () => {
+    // Local clear only — no backend bulk-clear endpoint
     setCartItems([]);
   };
 
-  const addToWishlist = (item: Omit<WishlistItem, 'id'>) => {
-    setWishlistItems((prev) => {
-      const exists = prev.find((i) => i.productId === item.productId);
-      if (exists) return prev;
-
-      return [...prev, { ...item, id: Date.now().toString() + Math.random() }];
-    });
-  };
-
-  const removeFromWishlist = (id: string) => {
-    setWishlistItems((prev) => prev.filter((item) => item.id !== id));
-  };
-
-  const moveToCart = (wishlistItemId: string) => {
-    const item = wishlistItems.find((i) => i.id === wishlistItemId);
-    if (item) {
-      addToCart({
-        productId: item.productId,
-        name: item.name,
-        price: item.price,
-        quantity: 1,
-        image: item.image,
-        retailerId: item.retailerId,
-        retailerName: item.retailerName,
-      });
-      removeFromWishlist(wishlistItemId);
+  const addToWishlist = async (productId: string) => {
+    if (!isAuthenticated()) {
+      toast.error('Please log in to save items to wishlist');
+      return;
+    }
+    const alreadyIn = wishlistItems.some((i) => i.productId === productId);
+    if (alreadyIn) {
+      toast.info('Already in your wishlist');
+      return;
+    }
+    try {
+      await api.post('/wishlist', { productId });
+      await refreshWishlist();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to add to wishlist');
+      throw err;
     }
   };
 
-  const cartTotal = cartItems.reduce(
-    (total, item) => total + item.price * item.quantity,
-    0
-  );
+  const removeFromWishlist = async (wishlistItemId: string) => {
+    if (!isAuthenticated()) return;
+    try {
+      await api.delete(`/wishlist/${wishlistItemId}`);
+      setWishlistItems((prev) => prev.filter((i) => i.id !== wishlistItemId));
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to remove from wishlist');
+      throw err;
+    }
+  };
 
-  const cartCount = cartItems.reduce((count, item) => count + item.quantity, 0);
+  const moveToCart = async (wishlistItemId: string) => {
+    if (!isAuthenticated()) return;
+    try {
+      await api.post(`/wishlist/${wishlistItemId}/move-to-cart`, {});
+      await refreshCart();
+      setWishlistItems((prev) => prev.filter((i) => i.id !== wishlistItemId));
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to move to cart');
+      throw err;
+    }
+  };
+
+  const cartTotal = cartItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0);
   const wishlistCount = wishlistItems.length;
 
   return (
@@ -147,6 +209,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         cartTotal,
         cartCount,
         wishlistCount,
+        refreshCart,
+        refreshWishlist,
       }}
     >
       {children}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
+import { api } from '@/lib/api';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import { Input } from '@/app/components/ui/input';
@@ -32,10 +33,7 @@ interface Product {
   price: number;
   images: string[];
   category: string;
-  retailerId?: string;
-  retailerName?: string;
-  manufacturerId?: string;
-  manufacturerName?: string;
+  brand?: string;
   stock?: number;
   rating?: number;
   reviews?: number;
@@ -65,23 +63,32 @@ export default function ProductDetail() {
   const [reviews, setReviews] = useState<Review[]>([]);
 
   useEffect(() => {
-    // Load product
-    const products = JSON.parse(localStorage.getItem('products') || '[]');
-    const found = products.find((p: any) => p.id === id);
+    if (!id) return;
 
-    if (found) {
-      const enhancedProduct = {
-        ...found,
-        retailerId: found.retailerId || '3',
-        retailerName: found.retailerName || 'Test Retailer',
-        rating: found.rating || (Math.random() * 2 + 3).toFixed(1),
-        reviews: found.reviews || Math.floor(Math.random() * 500) + 50,
-        inStock: found.stock > 0,
-        discount: found.discount || (Math.random() > 0.7 ? Math.floor(Math.random() * 30) + 10 : 0),
-      };
-      setProduct(enhancedProduct);
+    api.get<unknown>(`/shop/products/${id}`).then((res) => {
+      const p = res.data as Record<string, unknown>;
+      const regularPrice = Number(p.regular_price) || 0;
+      const salesPrice = Number(p.sales_price) || 0;
+      const discount = salesPrice > 0 && salesPrice < regularPrice
+        ? Math.round((1 - salesPrice / regularPrice) * 100)
+        : 0;
+      const gallery = Array.isArray(p.gallery) ? (p.gallery as string[]) : [];
+      const images = [(p.image_url as string) || '', ...gallery].filter(Boolean);
 
-      // Generate mock reviews
+      setProduct({
+        id: (p.id as string) || '',
+        name: (p.name as string) || '',
+        description: (p.description as string) || '',
+        price: regularPrice,
+        images: images.length > 0 ? images : ['/placeholder.png'],
+        category: (p.category_id as string) || '',
+        brand: (p.brand as string) || '',
+        stock: Number(p.stock_quantity) || 0,
+        inStock: (p.status as string) === 'active',
+        discount,
+      });
+
+      // Keep mock reviews since no review API yet
       const mockReviews: Review[] = Array.from({ length: 5 }, (_, i) => ({
         id: String(i + 1),
         userName: ['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson', 'David Brown'][i],
@@ -98,7 +105,7 @@ export default function ProductDetail() {
         verified: Math.random() > 0.3,
       }));
       setReviews(mockReviews);
-    }
+    }).catch(() => {});
   }, [id]);
 
   if (!product) {
@@ -120,35 +127,17 @@ export default function ProductDetail() {
     ? product.price * (1 - product.discount / 100)
     : product.price;
 
-  const handleAddToCart = () => {
-    addToCart({
-      productId: product.id,
-      name: product.name,
-      price: finalPrice,
-      quantity,
-      image: product.images[selectedImage],
-      retailerId: product.retailerId || '3',
-      retailerName: product.retailerName || 'Test Retailer',
-      variant: selectedVariant !== 'default' ? selectedVariant : undefined,
-    });
-    toast.success('Added to cart!');
+  const handleAddToCart = async () => {
+    await addToCart(product.id, quantity);
   };
 
-  const handleBuyNow = () => {
-    handleAddToCart();
+  const handleBuyNow = async () => {
+    await handleAddToCart();
     navigate('/buyer/cart');
   };
 
   const handleAddToWishlist = () => {
-    addToWishlist({
-      productId: product.id,
-      name: product.name,
-      price: product.price,
-      image: product.images[selectedImage],
-      retailerId: product.retailerId || '3',
-      retailerName: product.retailerName || 'Test Retailer',
-    });
-    toast.success('Added to wishlist!');
+    addToWishlist(product.id);
   };
 
   const averageRating = reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length;
@@ -179,7 +168,7 @@ export default function ProductDetail() {
               <div className="w-8 h-8 bg-[#BE220E] rounded-lg flex items-center justify-center">
                 <Home className="w-5 h-5 text-white" />
               </div>
-              <span className="font-bold text-lg hidden md:inline">VeeVill Hub</span>
+              <span className="font-bold text-lg hidden md:inline">Anointed</span>
             </Link>
           </div>
 
@@ -288,15 +277,12 @@ export default function ProductDetail() {
                 <span className="text-gray-600">({reviews.length} reviews)</span>
               </div>
 
-              <div className="flex items-center gap-2 mb-6 text-gray-600">
-                <Store className="w-4 h-4" />
-                <Link
-                  to={`/buyer/retailer/${product.retailerId}`}
-                  className="hover:text-[#BE220E] hover:underline"
-                >
-                  {product.retailerName}
-                </Link>
-              </div>
+              {product.brand && (
+                <div className="flex items-center gap-2 mb-6 text-gray-600">
+                  <Store className="w-4 h-4" />
+                  <span>{product.brand}</span>
+                </div>
+              )}
 
               {/* Price */}
               <div className="flex items-baseline gap-3 mb-6">
@@ -438,14 +424,12 @@ export default function ProductDetail() {
                       <span className="w-40 text-gray-600">Category:</span>
                       <span className="font-medium">{product.category}</span>
                     </div>
-                    <div className="flex">
-                      <span className="w-40 text-gray-600">Manufacturer:</span>
-                      <span className="font-medium">{product.manufacturerName}</span>
-                    </div>
-                    <div className="flex">
-                      <span className="w-40 text-gray-600">Retailer:</span>
-                      <span className="font-medium">{product.retailerName}</span>
-                    </div>
+                    {product.brand && (
+                      <div className="flex">
+                        <span className="w-40 text-gray-600">Brand:</span>
+                        <span className="font-medium">{product.brand}</span>
+                      </div>
+                    )}
                     <div className="flex">
                       <span className="w-40 text-gray-600">Availability:</span>
                       <span className="font-medium">

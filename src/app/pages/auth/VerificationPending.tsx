@@ -67,8 +67,8 @@ export default function VerificationPending() {
           <div className="mt-8 pt-6 border-t border-gray-200">
             <p className="text-sm text-gray-500">
               Need help? Contact us at{' '}
-              <a href="mailto:support@veevillhub.com" className="text-[#BE220E] hover:underline">
-                support@veevillhub.com
+              <a href="mailto:support@anointed.com" className="text-[#BE220E] hover:underline">
+                support@anointed.com
               </a>
             </p>
           </div>

@@ -34,14 +34,7 @@ export default function Cart() {
   };
 
   const handleMoveToWishlist = (item: any) => {
-    addToWishlist({
-      productId: item.productId,
-      name: item.name,
-      price: item.price,
-      image: item.image,
-      retailerId: item.retailerId,
-      retailerName: item.retailerName,
-    });
+    addToWishlist(item.productId);
     removeFromCart(item.id);
     toast.success('Moved to wishlist');
   };

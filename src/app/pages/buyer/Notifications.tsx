@@ -11,14 +11,14 @@ import {
   CheckCircle,
   AlertCircle,
   Info,
-  Gift,
-  Zap,
   Star,
   Clock,
   ShoppingCart,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { api, ApiError } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface Notification {
   id: string;
@@ -36,120 +36,26 @@ export default function BuyerNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<string>('all');
 
-  useEffect(() => {
-    // Generate mock notifications
-    const mockNotifications: Notification[] = [
-      {
-        id: '1',
-        type: 'order',
-        title: 'Order Shipped',
-        message: 'Your order #12345 has been shipped and is on the way!',
-        timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 mins ago
-        read: false,
-        actionLink: '/buyer/order-tracking/12345',
-        actionText: 'Track Order',
-      },
-      {
-        id: '2',
-        type: 'price_drop',
-        title: 'Price Drop Alert! 💰',
-        message: 'Premium Wireless Headphones is now 25% off! Only ₦45,000',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
-        read: false,
-        actionLink: '/buyer/product/prod-123',
-        actionText: 'View Product',
-      },
-      {
-        id: '3',
-        type: 'wishlist',
-        title: 'Wishlist Item Back in Stock',
-        message: 'Great news! "Designer Sunglasses" from your wishlist is back in stock.',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), // 5 hours ago
-        read: false,
-        actionLink: '/buyer/wishlist',
-        actionText: 'View Wishlist',
-      },
-      {
-        id: '4',
-        type: 'promo',
-        title: 'Flash Sale Starting Soon! ⚡',
-        message: 'Flash sale on Electronics category starts in 1 hour. Up to 70% off!',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(), // 8 hours ago
-        read: true,
-        actionLink: '/buyer/deals',
-        actionText: 'Shop Now',
-      },
-      {
-        id: '5',
-        type: 'delivery',
-        title: 'Order Delivered',
-        message: 'Your order #12340 has been delivered. Thank you for shopping with us!',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
-        read: true,
-        actionLink: '/buyer/orders',
-        actionText: 'View Order',
-      },
-      {
-        id: '6',
-        type: 'review',
-        title: 'Rate Your Recent Purchase',
-        message: 'How was your experience with "Smart Watch Pro"? Share your review.',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(), // 2 days ago
-        read: true,
-        actionLink: '/buyer/orders',
-        actionText: 'Write Review',
-      },
-      {
-        id: '7',
-        type: 'promo',
-        title: 'Exclusive Offer for You! 🎁',
-        message: 'Get 15% off on your next purchase. Use code: LOYAL15',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(), // 3 days ago
-        read: true,
-        actionLink: '/buyer/shop',
-        actionText: 'Start Shopping',
-      },
-      {
-        id: '8',
-        type: 'order',
-        title: 'Order Confirmed',
-        message: 'We\'ve received your order #12350. Processing will begin shortly.',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4).toISOString(), // 4 days ago
-        read: true,
-        actionLink: '/buyer/orders',
-        actionText: 'View Details',
-      },
-      {
-        id: '9',
-        type: 'price_drop',
-        title: 'Price Drop on Watched Item',
-        message: 'Running Shoes you viewed is now 30% cheaper at ₦28,000',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(), // 5 days ago
-        read: true,
-        actionLink: '/buyer/product/prod-456',
-        actionText: 'Check it Out',
-      },
-      {
-        id: '10',
-        type: 'general',
-        title: 'Welcome to VeeVill Hub!',
-        message: 'Thank you for joining us. Explore thousands of products from trusted retailers.',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(), // 7 days ago
-        read: true,
-        actionLink: '/buyer/shop',
-        actionText: 'Explore',
-      },
-    ];
+  const loadNotifications = () => {
+    api.get<unknown>('/notifications').then((res) => {
+      const data = res.data as Record<string, unknown>;
+      const raw = (data.notifications || res.data) as Record<string, unknown>[];
+      if (Array.isArray(raw)) {
+        setNotifications(raw.map((n) => ({
+          id: n.id as string,
+          type: ((n.type as string) || 'general') as Notification['type'],
+          title: (n.title as string) || '',
+          message: (n.message as string) || '',
+          timestamp: (n.created_at as string) || new Date().toISOString(),
+          read: !!(n.is_read),
+          actionLink: (n.action_link as string) || undefined,
+          actionText: (n.action_text as string) || undefined,
+        })));
+      }
+    }).catch(() => {});
+  };
 
-    // Load from localStorage or use mock data
-    const stored = localStorage.getItem('buyer_notifications');
-    if (stored) {
-      setNotifications(JSON.parse(stored));
-    } else {
-      setNotifications(mockNotifications);
-      localStorage.setItem('buyer_notifications', JSON.stringify(mockNotifications));
-    }
-  }, []);
+  useEffect(() => { loadNotifications(); }, []);
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -192,24 +98,27 @@ export default function BuyerNotifications() {
     return 'Just now';
   };
 
-  const markAsRead = (id: string) => {
-    const updated = notifications.map(n =>
-      n.id === id ? { ...n, read: true } : n
-    );
-    setNotifications(updated);
-    localStorage.setItem('buyer_notifications', JSON.stringify(updated));
+  const markAsRead = async (id: string) => {
+    try {
+      await api.patch(`/notifications/${id}/read`, {});
+      setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to mark as read');
+    }
   };
 
-  const markAllAsRead = () => {
-    const updated = notifications.map(n => ({ ...n, read: true }));
-    setNotifications(updated);
-    localStorage.setItem('buyer_notifications', JSON.stringify(updated));
+  const markAllAsRead = async () => {
+    try {
+      await api.patch('/notifications/read-all', {});
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to mark all as read');
+    }
   };
 
   const deleteNotification = (id: string) => {
-    const updated = notifications.filter(n => n.id !== id);
-    setNotifications(updated);
-    localStorage.setItem('buyer_notifications', JSON.stringify(updated));
+    // No delete endpoint in backend — just hide locally
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
   const filteredNotifications = filter === 'all'

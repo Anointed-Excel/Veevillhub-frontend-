@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/lib/api';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import {
@@ -8,11 +8,9 @@ import {
   Package,
   Truck,
   CheckCircle,
-  Clock,
   MapPin,
   Phone,
   Mail,
-  Download,
   Share2,
   Home,
   Calendar,
@@ -27,13 +25,11 @@ interface OrderItem {
   image: string;
   price: number;
   quantity: number;
-  retailerId: string;
-  retailerName: string;
 }
 
 interface Order {
   id: string;
-  userId: string;
+  orderNumber: string;
   items: OrderItem[];
   subtotal: number;
   shippingFee: number;
@@ -49,7 +45,6 @@ interface Order {
     state: string;
     zipCode?: string;
   };
-  paymentMethod: string;
   trackingNumber?: string;
 }
 
@@ -63,24 +58,59 @@ interface TrackingStep {
 
 export default function OrderTracking() {
   const { id } = useParams();
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [order, setOrder] = useState<Order | null>(null);
   const [trackingSteps, setTrackingSteps] = useState<TrackingStep[]>([]);
 
   useEffect(() => {
-    // Load order from localStorage
-    const storedOrders = JSON.parse(localStorage.getItem('buyer_orders') || '[]');
-    const found = storedOrders.find((o: Order) => o.id === id);
+    if (!id) return;
 
-    if (found && found.userId === user?.id) {
-      setOrder(found);
+    const statusMap: Record<string, Order['status']> = {
+      pending_payment: 'pending',
+      confirmed: 'processing',
+      shipped: 'shipped',
+      delivered: 'delivered',
+      cancelled: 'cancelled',
+    };
 
-      // Generate tracking steps based on order status
-      const steps = generateTrackingSteps(found);
-      setTrackingSteps(steps);
-    }
-  }, [id, user]);
+    api.get<unknown>(`/orders/${id}`).then((res) => {
+      const raw = res.data as Record<string, unknown>;
+      const addr = (raw.shipping_address || {}) as Record<string, unknown>;
+      const rawItems = (raw.items || []) as Record<string, unknown>[];
+
+      const mapped: Order = {
+        id: (raw.id as string) || '',
+        orderNumber: (raw.order_number as string) || (raw.id as string) || '',
+        subtotal: Number(raw.subtotal) || 0,
+        shippingFee: Number(raw.shipping_fee) || 0,
+        total: Number(raw.total) || 0,
+        status: statusMap[(raw.status as string) || ''] || 'pending',
+        createdAt: (raw.created_at as string) || new Date().toISOString(),
+        estimatedDelivery: new Date(
+          new Date((raw.created_at as string) || Date.now()).getTime() + 7 * 24 * 60 * 60 * 1000
+        ).toISOString(),
+        shippingAddress: {
+          fullName: (addr.full_name as string) || '',
+          phone: (addr.phone_number as string) || '',
+          address: (addr.street_address as string) || '',
+          city: (addr.city as string) || '',
+          state: (addr.state as string) || '',
+          zipCode: (addr.zipcode as string) || '',
+        },
+        items: rawItems.map((item) => ({
+          id: (item.id as string) || '',
+          productId: (item.product_id as string) || '',
+          name: (item.product_name as string) || '',
+          image: (item.product_image as string) || '',
+          price: Number(item.price) || 0,
+          quantity: Number(item.quantity) || 1,
+        })),
+      };
+
+      setOrder(mapped);
+      setTrackingSteps(generateTrackingSteps(mapped));
+    }).catch(() => {});
+  }, [id]);
 
   const generateTrackingSteps = (order: Order): TrackingStep[] => {
     const baseSteps = [
@@ -180,7 +210,7 @@ export default function OrderTracking() {
     );
   }
 
-  const trackingNumber = order.trackingNumber || `TRK${order.id.slice(-10).toUpperCase()}`;
+  const trackingNumber = order.trackingNumber || `TRK${order.orderNumber.slice(-10).toUpperCase()}`;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
@@ -194,7 +224,7 @@ export default function OrderTracking() {
             <div className="w-8 h-8 bg-[#BE220E] rounded-lg flex items-center justify-center">
               <Home className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-lg hidden md:inline">VeeVill Hub</span>
+            <span className="font-bold text-lg hidden md:inline">Anointed</span>
           </Link>
           <div className="flex-1"></div>
           <Button variant="ghost" size="icon" onClick={handleShare}>
@@ -209,7 +239,7 @@ export default function OrderTracking() {
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
             <div>
               <h1 className="text-2xl font-bold mb-2">Track Your Order</h1>
-              <p className="text-gray-600">Order #{order.id}</p>
+              <p className="text-gray-600">Order #{order.orderNumber}</p>
               <div className="flex items-center gap-2 mt-2 text-sm text-gray-600">
                 <Calendar className="w-4 h-4" />
                 <span>Placed on {new Date(order.createdAt).toLocaleDateString()}</span>
@@ -402,7 +432,7 @@ export default function OrderTracking() {
             {/* Payment Method */}
             <Card className="p-6">
               <h3 className="font-semibold mb-2">Payment Method</h3>
-              <p className="text-sm text-gray-600 capitalize">{order.paymentMethod}</p>
+              <p className="text-sm text-gray-600 capitalize">Online Payment</p>
               <p className="text-sm text-green-600 font-medium mt-2">✓ Payment Confirmed</p>
             </Card>
 
@@ -446,7 +476,7 @@ export default function OrderTracking() {
               <Mail className="w-5 h-5 text-[#BE220E] flex-shrink-0 mt-1" />
               <div>
                 <p className="text-sm font-medium mb-1">Email Support</p>
-                <p className="text-sm text-gray-600">support@veevillhub.com</p>
+                <p className="text-sm text-gray-600">support@anointed.com</p>
               </div>
             </div>
           </div>

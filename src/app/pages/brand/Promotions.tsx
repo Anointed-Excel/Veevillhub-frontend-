@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
@@ -7,8 +7,9 @@ import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
-import { Plus, Tag, Edit2, Trash2, Eye, X, Calendar, Percent, DollarSign, Package, AlertCircle } from 'lucide-react';
+import { Plus, Tag, Edit2, Trash2, Eye, Calendar, Percent, DollarSign, Package, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { api, ApiError } from '@/lib/api';
 
 interface Promotion {
   id: string;
@@ -26,101 +27,70 @@ interface Promotion {
   endDate: string;
   applicableTo: 'all' | 'categories' | 'products';
   categories?: string[];
-  products?: string[];
   createdDate: string;
 }
 
-export default function BrandPromotions() {
-  const [promotions, setPromotions] = useState<Promotion[]>([
-    {
-      id: '1',
-      title: 'New Year Mega Sale',
-      description: 'Start the year with amazing discounts on all food products',
-      code: 'NEWYEAR2024',
-      type: 'percentage',
-      discount: 20,
-      minPurchase: 50,
-      maxDiscount: 100,
-      usageLimit: 1000,
-      usedCount: 245,
-      status: 'active',
-      startDate: '2024-01-01',
-      endDate: '2024-12-31',
-      applicableTo: 'categories',
-      categories: ['Food & Beverage'],
-      createdDate: '2023-12-15'
-    },
-    {
-      id: '2',
-      title: 'Free Shipping',
-      description: 'Free shipping on orders above $100',
-      code: 'FREESHIP',
-      type: 'shipping',
-      discount: 0,
-      minPurchase: 100,
-      usageLimit: 500,
-      usedCount: 156,
-      status: 'active',
-      startDate: '2024-01-01',
-      endDate: '2024-12-31',
-      applicableTo: 'all',
-      createdDate: '2024-01-01'
-    },
-    {
-      id: '3',
-      title: 'Black Friday Blowout',
-      description: 'Massive 50% off on all products',
-      code: 'BLACKFRI50',
-      type: 'percentage',
-      discount: 50,
-      minPurchase: 0,
-      maxDiscount: 500,
-      usageLimit: 2000,
-      usedCount: 1847,
-      status: 'expired',
-      startDate: '2023-11-24',
-      endDate: '2023-11-27',
-      applicableTo: 'all',
-      createdDate: '2023-11-01'
-    },
-    {
-      id: '4',
-      title: 'VIP Customer Discount',
-      description: '$25 off for loyal customers',
-      code: 'VIP25',
-      type: 'fixed',
-      discount: 25,
-      minPurchase: 200,
-      usageLimit: 100,
-      usedCount: 0,
-      status: 'scheduled',
-      startDate: '2024-02-01',
-      endDate: '2024-02-28',
-      applicableTo: 'all',
-      createdDate: '2024-01-15'
-    },
-  ]);
+function normalizePromo(p: Record<string, unknown>): Promotion {
+  return {
+    id: p.id as string,
+    title: (p.title as string) || '',
+    description: (p.description as string) || '',
+    code: (p.promo_code as string) || '',
+    type: 'percentage' as const,
+    discount: Number(p.discount_percentage) || 0,
+    minPurchase: Number(p.min_purchase) || 0,
+    maxDiscount: p.max_discount ? Number(p.max_discount) : undefined,
+    usageLimit: Number(p.usage_limit) || 0,
+    usedCount: Number(p.used_count) || 0,
+    status: (p.status as Promotion['status']) || 'inactive',
+    startDate: p.start_date ? String(p.start_date).split('T')[0] : '',
+    endDate: p.end_date ? String(p.end_date).split('T')[0] : '',
+    applicableTo: (p.applicable_to as Promotion['applicableTo']) || 'all',
+    createdDate: p.created_at ? String(p.created_at).split('T')[0] : '',
+  };
+}
 
+const emptyForm = {
+  title: '',
+  description: '',
+  code: '',
+  type: 'percentage' as 'percentage' | 'fixed' | 'shipping',
+  discount: '',
+  minPurchase: '',
+  maxDiscount: '',
+  usageLimit: '',
+  startDate: '',
+  endDate: '',
+  applicableTo: 'all' as 'all' | 'categories' | 'products',
+  categories: [] as string[],
+};
+
+export default function BrandPromotions() {
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    code: '',
-    type: 'percentage' as 'percentage' | 'fixed' | 'shipping',
-    discount: '',
-    minPurchase: '',
-    maxDiscount: '',
-    usageLimit: '',
-    startDate: '',
-    endDate: '',
-    applicableTo: 'all' as 'all' | 'categories' | 'products',
-    categories: [] as string[],
-  });
+  const [formData, setFormData] = useState(emptyForm);
+
+  const loadPromotions = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<unknown>('/admin/promotions');
+      const raw = ((res.data as Record<string, unknown>).promotions || res.data) as Record<string, unknown>[];
+      setPromotions((Array.isArray(raw) ? raw : []).map(normalizePromo));
+    } catch {
+      toast.error('Failed to load promotions');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadPromotions(); }, []);
 
   const filteredPromotions = promotions.filter((promo) => {
     const matchesSearch = promo.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -129,66 +99,76 @@ export default function BrandPromotions() {
     return matchesSearch && matchesStatus;
   });
 
-  const handleCreate = () => {
-    if (!formData.title || !formData.code || !formData.discount || !formData.startDate || !formData.endDate) {
+  const handleCreate = async () => {
+    if (!formData.title || !formData.code || !formData.startDate || !formData.endDate) {
       toast.error('Please fill in all required fields');
       return;
     }
-
-    const newPromotion: Promotion = {
-      id: Date.now().toString(),
-      title: formData.title,
-      description: formData.description,
-      code: formData.code.toUpperCase(),
-      type: formData.type,
-      discount: parseFloat(formData.discount),
-      minPurchase: parseFloat(formData.minPurchase) || 0,
-      maxDiscount: formData.maxDiscount ? parseFloat(formData.maxDiscount) : undefined,
-      usageLimit: parseInt(formData.usageLimit) || 1000,
-      usedCount: 0,
-      status: new Date(formData.startDate) > new Date() ? 'scheduled' : 'active',
-      startDate: formData.startDate,
-      endDate: formData.endDate,
-      applicableTo: formData.applicableTo,
-      categories: formData.categories,
-      createdDate: new Date().toISOString().split('T')[0]
-    };
-
-    setPromotions([newPromotion, ...promotions]);
-    setShowCreateModal(false);
-    resetForm();
-    toast.success('Promotion created successfully!');
+    if (formData.type !== 'shipping' && !formData.discount) {
+      toast.error('Please enter a discount value');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.post('/admin/promotions', {
+        title: formData.title,
+        description: formData.description,
+        promo_code: formData.code.toUpperCase(),
+        discount_percentage: formData.type === 'percentage' ? parseFloat(formData.discount) : 0,
+        min_purchase: parseFloat(formData.minPurchase) || 0,
+        max_discount: formData.maxDiscount ? parseFloat(formData.maxDiscount) : undefined,
+        usage_limit: parseInt(formData.usageLimit) || 1000,
+        start_date: formData.startDate,
+        end_date: formData.endDate,
+        applicable_to: formData.applicableTo,
+      });
+      toast.success('Promotion created successfully!');
+      setShowCreateModal(false);
+      setFormData(emptyForm);
+      loadPromotions();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to create promotion');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (!selectedPromotion) return;
-
-    const updatedPromotion: Promotion = {
-      ...selectedPromotion,
-      title: formData.title,
-      description: formData.description,
-      code: formData.code.toUpperCase(),
-      type: formData.type,
-      discount: parseFloat(formData.discount),
-      minPurchase: parseFloat(formData.minPurchase) || 0,
-      maxDiscount: formData.maxDiscount ? parseFloat(formData.maxDiscount) : undefined,
-      usageLimit: parseInt(formData.usageLimit),
-      startDate: formData.startDate,
-      endDate: formData.endDate,
-      applicableTo: formData.applicableTo,
-      categories: formData.categories,
-    };
-
-    setPromotions(promotions.map((p) => p.id === selectedPromotion.id ? updatedPromotion : p));
-    setShowEditModal(false);
-    setSelectedPromotion(null);
-    toast.success('Promotion updated successfully!');
+    setSaving(true);
+    try {
+      await api.put(`/admin/promotions/${selectedPromotion.id}`, {
+        title: formData.title,
+        description: formData.description,
+        promo_code: formData.code.toUpperCase(),
+        discount_percentage: parseFloat(formData.discount) || 0,
+        min_purchase: parseFloat(formData.minPurchase) || 0,
+        max_discount: formData.maxDiscount ? parseFloat(formData.maxDiscount) : undefined,
+        usage_limit: parseInt(formData.usageLimit) || 1000,
+        start_date: formData.startDate,
+        end_date: formData.endDate,
+        applicable_to: formData.applicableTo,
+      });
+      toast.success('Promotion updated successfully!');
+      setShowEditModal(false);
+      setSelectedPromotion(null);
+      setFormData(emptyForm);
+      loadPromotions();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to update promotion');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this promotion?')) {
-      setPromotions(promotions.filter((p) => p.id !== id));
-      toast.success('Promotion deleted successfully');
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this promotion?')) return;
+    try {
+      await api.delete(`/admin/promotions/${id}`);
+      setPromotions((prev) => prev.filter((p) => p.id !== id));
+      toast.success('Promotion deleted');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to delete promotion');
     }
   };
 
@@ -216,34 +196,19 @@ export default function BrandPromotions() {
     setShowEditModal(true);
   };
 
-  const toggleStatus = (id: string) => {
-    setPromotions(promotions.map((p) =>
-      p.id === id
-        ? {
-            ...p,
-            status: p.status === 'active' ? ('inactive' as const) : ('active' as const)
-          }
-        : p
-    ));
-    const promo = promotions.find((p) => p.id === id);
-    toast.success(`Promotion ${promo?.status === 'active' ? 'disabled' : 'enabled'} successfully`);
-  };
-
-  const resetForm = () => {
-    setFormData({
-      title: '',
-      description: '',
-      code: '',
-      type: 'percentage',
-      discount: '',
-      minPurchase: '',
-      maxDiscount: '',
-      usageLimit: '',
-      startDate: '',
-      endDate: '',
-      applicableTo: 'all',
-      categories: [],
-    });
+  const toggleStatus = async (promo: Promotion) => {
+    const disable = promo.status === 'active';
+    try {
+      await api.patch(`/admin/promotions/${promo.id}/toggle`, { disable });
+      setPromotions((prev) => prev.map((p) =>
+        p.id === promo.id
+          ? { ...p, status: disable ? ('inactive' as const) : ('active' as const) }
+          : p
+      ));
+      toast.success(`Promotion ${disable ? 'disabled' : 'enabled'}`);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to update promotion status');
+    }
   };
 
   const getStatusColor = (status: Promotion['status']) => {
@@ -282,10 +247,7 @@ export default function BrandPromotions() {
             <p className="text-gray-600 mt-1">Create and manage promotional campaigns</p>
           </div>
           <Button
-            onClick={() => {
-              resetForm();
-              setShowCreateModal(true);
-            }}
+            onClick={() => { setFormData(emptyForm); setShowCreateModal(true); }}
             className="text-white"
             style={{ backgroundColor: '#BE220E' }}
           >
@@ -297,14 +259,11 @@ export default function BrandPromotions() {
         {/* Filters */}
         <Card className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="relative">
-              <Input
-                placeholder="Search promotions..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-3"
-              />
-            </div>
+            <Input
+              placeholder="Search promotions..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger>
                 <SelectValue placeholder="Filter by status" />
@@ -347,118 +306,88 @@ export default function BrandPromotions() {
         </div>
 
         {/* Promotions Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredPromotions.map((promo) => (
-            <Card
-              key={promo.id}
-              className="p-6 hover:shadow-lg transition-shadow duration-300 relative overflow-hidden group"
-            >
-              {/* Status Badge */}
-              <div className="absolute top-4 right-4">
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(promo.status)}`}>
-                  {promo.status}
-                </span>
-              </div>
-
-              {/* Promo Icon */}
-              <div className="w-14 h-14 bg-[#BE220E] bg-opacity-10 rounded-lg flex items-center justify-center mb-4">
-                <Tag className="w-7 h-7" style={{ color: '#BE220E' }} />
-              </div>
-
-              {/* Content */}
-              <h3 className="font-bold text-lg mb-2">{promo.title}</h3>
-              <p className="text-sm text-gray-600 mb-4 line-clamp-2">{promo.description}</p>
-
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Code:</span>
-                  <span className="font-mono font-medium bg-gray-100 px-2 py-1 rounded">{promo.code}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 flex items-center gap-1">
-                    {getTypeIcon(promo.type)}
-                    Discount:
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredPromotions.map((promo) => (
+              <Card key={promo.id} className="p-6 hover:shadow-lg transition-shadow duration-300 relative overflow-hidden">
+                <div className="absolute top-4 right-4">
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(promo.status)}`}>
+                    {promo.status}
                   </span>
-                  <span className="font-bold text-lg" style={{ color: '#BE220E' }}>{getDiscountDisplay(promo)}</span>
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Min Purchase:</span>
-                  <span className="font-medium">${promo.minPurchase}</span>
+                <div className="w-14 h-14 bg-[#BE220E] bg-opacity-10 rounded-lg flex items-center justify-center mb-4">
+                  <Tag className="w-7 h-7" style={{ color: '#BE220E' }} />
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Usage:</span>
-                  <span className="font-medium">{promo.usedCount} / {promo.usageLimit}</span>
+                <h3 className="font-bold text-lg mb-2">{promo.title}</h3>
+                <p className="text-sm text-gray-600 mb-4 line-clamp-2">{promo.description}</p>
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Code:</span>
+                    <span className="font-mono font-medium bg-gray-100 px-2 py-1 rounded">{promo.code}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 flex items-center gap-1">
+                      {getTypeIcon(promo.type)} Discount:
+                    </span>
+                    <span className="font-bold text-lg" style={{ color: '#BE220E' }}>{getDiscountDisplay(promo)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Min Purchase:</span>
+                    <span className="font-medium">₦{promo.minPurchase.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Usage:</span>
+                    <span className="font-medium">{promo.usedCount} / {promo.usageLimit}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 flex items-center gap-1">
+                      <Calendar className="w-3 h-3" /> Valid:
+                    </span>
+                    <span className="text-xs">{promo.startDate} → {promo.endDate}</span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
-                    Valid:
-                  </span>
-                  <span className="text-xs">{promo.startDate} to {promo.endDate}</span>
+                <div className="mb-4">
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="h-2 rounded-full transition-all duration-300"
+                      style={{
+                        width: `${Math.min((promo.usedCount / Math.max(promo.usageLimit, 1)) * 100, 100)}%`,
+                        backgroundColor: '#BE220E',
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="mb-4">
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="h-2 rounded-full transition-all duration-300"
-                    style={{
-                      width: `${Math.min((promo.usedCount / promo.usageLimit) * 100, 100)}%`,
-                      backgroundColor: '#BE220E'
-                    }}
-                  />
+                <div className="grid grid-cols-2 gap-2 pt-4 border-t">
+                  <Button onClick={() => handleView(promo)} variant="outline" size="sm" className="hover:bg-blue-50">
+                    <Eye className="w-4 h-4 mr-1" /> View
+                  </Button>
+                  <Button onClick={() => handleEditClick(promo)} variant="outline" size="sm" className="hover:bg-yellow-50">
+                    <Edit2 className="w-4 h-4 mr-1" /> Edit
+                  </Button>
+                  <Button
+                    onClick={() => toggleStatus(promo)}
+                    variant="outline"
+                    size="sm"
+                    disabled={promo.status === 'expired'}
+                    className={promo.status === 'active' ? 'hover:bg-red-50' : 'hover:bg-green-50'}
+                  >
+                    {promo.status === 'active' ? 'Disable' : 'Enable'}
+                  </Button>
+                  <Button onClick={() => handleDelete(promo.id)} variant="outline" size="sm" className="hover:bg-red-50">
+                    <Trash2 className="w-4 h-4 text-red-600" />
+                  </Button>
                 </div>
-              </div>
-
-              {/* Actions */}
-              <div className="grid grid-cols-2 gap-2 pt-4 border-t">
-                <Button
-                  onClick={() => handleView(promo)}
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 hover:bg-blue-50 hover:border-blue-300 transition-colors"
-                >
-                  <Eye className="w-4 h-4 mr-1" />
-                  View
-                </Button>
-                <Button
-                  onClick={() => handleEditClick(promo)}
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 hover:bg-yellow-50 hover:border-yellow-300 transition-colors"
-                >
-                  <Edit2 className="w-4 h-4 mr-1" />
-                  Edit
-                </Button>
-                <Button
-                  onClick={() => toggleStatus(promo.id)}
-                  variant="outline"
-                  size="sm"
-                  className={`flex-1 transition-colors ${
-                    promo.status === 'active'
-                      ? 'hover:bg-red-50 hover:border-red-300'
-                      : 'hover:bg-green-50 hover:border-green-300'
-                  }`}
-                  disabled={promo.status === 'expired'}
-                >
-                  {promo.status === 'active' ? 'Disable' : 'Enable'}
-                </Button>
-                <Button
-                  onClick={() => handleDelete(promo.id)}
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 hover:bg-red-50 hover:border-red-300 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4 text-red-600" />
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
+              </Card>
+            ))}
+          </div>
+        )}
 
         {/* Empty State */}
-        {filteredPromotions.length === 0 && (
+        {!loading && filteredPromotions.length === 0 && (
           <Card className="p-12 text-center">
             <Tag className="w-16 h-16 mx-auto mb-4 text-gray-400" />
             <h3 className="text-xl font-semibold mb-2">No Promotions Found</h3>
@@ -469,27 +398,23 @@ export default function BrandPromotions() {
             </p>
             {!searchQuery && filterStatus === 'all' && (
               <Button
-                onClick={() => {
-                  resetForm();
-                  setShowCreateModal(true);
-                }}
+                onClick={() => { setFormData(emptyForm); setShowCreateModal(true); }}
                 className="text-white"
                 style={{ backgroundColor: '#BE220E' }}
               >
-                <Plus className="w-4 h-4 mr-2" />
-                Create Promotion
+                <Plus className="w-4 h-4 mr-2" /> Create Promotion
               </Button>
             )}
           </Card>
         )}
 
-        {/* Create/Edit Modal */}
+        {/* Create / Edit Modal */}
         <Dialog open={showCreateModal || showEditModal} onOpenChange={(open) => {
           if (!open) {
             setShowCreateModal(false);
             setShowEditModal(false);
             setSelectedPromotion(null);
-            resetForm();
+            setFormData(emptyForm);
           }
         }}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -499,153 +424,123 @@ export default function BrandPromotions() {
                 {showEditModal ? 'Update promotion details below' : 'Fill in the details to create a new promotion'}
               </DialogDescription>
             </DialogHeader>
-
             <div className="space-y-4">
-              {/* Basic Info */}
               <div>
-                <Label htmlFor="title">Promotion Title *</Label>
+                <Label>Promotion Title *</Label>
                 <Input
-                  id="title"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   placeholder="e.g., Summer Sale 2024"
                 />
               </div>
-
               <div>
-                <Label htmlFor="description">Description</Label>
+                <Label>Description</Label>
                 <Textarea
-                  id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Describe your promotion..."
                   rows={3}
                 />
               </div>
-
               <div>
-                <Label htmlFor="code">Promo Code *</Label>
+                <Label>Promo Code *</Label>
                 <Input
-                  id="code"
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                   placeholder="e.g., SUMMER2024"
                   className="uppercase font-mono"
                 />
               </div>
-
-              {/* Discount Type & Amount */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="type">Discount Type *</Label>
+                  <Label>Discount Type *</Label>
                   <Select
                     value={formData.type}
-                    onValueChange={(value: 'percentage' | 'fixed' | 'shipping') => 
+                    onValueChange={(value: 'percentage' | 'fixed' | 'shipping') =>
                       setFormData({ ...formData, type: value })
                     }
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="percentage">Percentage (%)</SelectItem>
-                      <SelectItem value="fixed">Fixed Amount ($)</SelectItem>
+                      <SelectItem value="fixed">Fixed Amount (₦)</SelectItem>
                       <SelectItem value="shipping">Free Shipping</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-
                 {formData.type !== 'shipping' && (
                   <div>
-                    <Label htmlFor="discount">
-                      {formData.type === 'percentage' ? 'Discount (%)' : 'Discount ($)'} *
-                    </Label>
+                    <Label>{formData.type === 'percentage' ? 'Discount (%)' : 'Discount (₦)'} *</Label>
                     <Input
-                      id="discount"
                       type="number"
                       step="0.01"
                       value={formData.discount}
                       onChange={(e) => setFormData({ ...formData, discount: e.target.value })}
-                      placeholder={formData.type === 'percentage' ? '20' : '25.00'}
+                      placeholder={formData.type === 'percentage' ? '20' : '2500'}
                     />
                   </div>
                 )}
               </div>
-
-              {/* Purchase Limits */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="minPurchase">Min Purchase Amount ($)</Label>
+                  <Label>Min Purchase Amount (₦)</Label>
                   <Input
-                    id="minPurchase"
                     type="number"
                     step="0.01"
                     value={formData.minPurchase}
                     onChange={(e) => setFormData({ ...formData, minPurchase: e.target.value })}
-                    placeholder="0.00"
+                    placeholder="0"
                   />
                 </div>
-
                 {formData.type === 'percentage' && (
                   <div>
-                    <Label htmlFor="maxDiscount">Max Discount ($)</Label>
+                    <Label>Max Discount (₦)</Label>
                     <Input
-                      id="maxDiscount"
                       type="number"
                       step="0.01"
                       value={formData.maxDiscount}
                       onChange={(e) => setFormData({ ...formData, maxDiscount: e.target.value })}
-                      placeholder="100.00"
+                      placeholder="10000"
                     />
                   </div>
                 )}
               </div>
-
-              {/* Usage & Dates */}
               <div>
-                <Label htmlFor="usageLimit">Usage Limit</Label>
+                <Label>Usage Limit</Label>
                 <Input
-                  id="usageLimit"
                   type="number"
                   value={formData.usageLimit}
                   onChange={(e) => setFormData({ ...formData, usageLimit: e.target.value })}
                   placeholder="1000"
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="startDate">Start Date *</Label>
+                  <Label>Start Date *</Label>
                   <Input
-                    id="startDate"
                     type="date"
                     value={formData.startDate}
                     onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="endDate">End Date *</Label>
+                  <Label>End Date *</Label>
                   <Input
-                    id="endDate"
                     type="date"
                     value={formData.endDate}
                     onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
                   />
                 </div>
               </div>
-
-              {/* Applicable To */}
               <div>
-                <Label htmlFor="applicableTo">Applicable To</Label>
+                <Label>Applicable To</Label>
                 <Select
                   value={formData.applicableTo}
-                  onValueChange={(value: 'all' | 'categories' | 'products') => 
+                  onValueChange={(value: 'all' | 'categories' | 'products') =>
                     setFormData({ ...formData, applicableTo: value })
                   }
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Products</SelectItem>
                     <SelectItem value="categories">Specific Categories</SelectItem>
@@ -654,24 +549,22 @@ export default function BrandPromotions() {
                 </Select>
               </div>
             </div>
-
-            <DialogFooter className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowCreateModal(false);
-                  setShowEditModal(false);
-                  setSelectedPromotion(null);
-                  resetForm();
-                }}
-              >
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setShowCreateModal(false);
+                setShowEditModal(false);
+                setSelectedPromotion(null);
+                setFormData(emptyForm);
+              }}>
                 Cancel
               </Button>
               <Button
                 onClick={showEditModal ? handleEdit : handleCreate}
                 className="text-white"
                 style={{ backgroundColor: '#BE220E' }}
+                disabled={saving}
               >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                 {showEditModal ? 'Update Promotion' : 'Create Promotion'}
               </Button>
             </DialogFooter>
@@ -686,7 +579,6 @@ export default function BrandPromotions() {
             </DialogHeader>
             {selectedPromotion && (
               <div className="space-y-6">
-                {/* Header */}
                 <div className="flex items-start justify-between pb-4 border-b">
                   <div className="flex items-start gap-4">
                     <div className="w-16 h-16 bg-[#BE220E] bg-opacity-10 rounded-lg flex items-center justify-center">
@@ -701,36 +593,29 @@ export default function BrandPromotions() {
                     {selectedPromotion.status}
                   </span>
                 </div>
-
-                {/* Details Grid */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <div className="text-sm text-gray-600 mb-1">Promo Code</div>
                     <div className="font-mono font-bold text-lg">{selectedPromotion.code}</div>
                   </div>
-
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <div className="text-sm text-gray-600 mb-1 flex items-center gap-1">
-                      {getTypeIcon(selectedPromotion.type)}
-                      Discount
+                      {getTypeIcon(selectedPromotion.type)} Discount
                     </div>
                     <div className="font-bold text-lg" style={{ color: '#BE220E' }}>
                       {getDiscountDisplay(selectedPromotion)}
                     </div>
                   </div>
-
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <div className="text-sm text-gray-600 mb-1">Min Purchase</div>
-                    <div className="font-bold text-lg">${selectedPromotion.minPurchase}</div>
+                    <div className="font-bold text-lg">₦{selectedPromotion.minPurchase.toLocaleString()}</div>
                   </div>
-
                   {selectedPromotion.maxDiscount && (
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <div className="text-sm text-gray-600 mb-1">Max Discount</div>
-                      <div className="font-bold text-lg">${selectedPromotion.maxDiscount}</div>
+                      <div className="font-bold text-lg">₦{selectedPromotion.maxDiscount.toLocaleString()}</div>
                     </div>
                   )}
-
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <div className="text-sm text-gray-600 mb-1">Usage</div>
                     <div className="font-bold text-lg">
@@ -740,45 +625,36 @@ export default function BrandPromotions() {
                       <div
                         className="h-2 rounded-full"
                         style={{
-                          width: `${Math.min((selectedPromotion.usedCount / selectedPromotion.usageLimit) * 100, 100)}%`,
-                          backgroundColor: '#BE220E'
+                          width: `${Math.min((selectedPromotion.usedCount / Math.max(selectedPromotion.usageLimit, 1)) * 100, 100)}%`,
+                          backgroundColor: '#BE220E',
                         }}
                       />
                     </div>
                   </div>
-
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <div className="text-sm text-gray-600 mb-1">Valid Period</div>
                     <div className="font-medium text-sm">{selectedPromotion.startDate}</div>
                     <div className="text-xs text-gray-500">to</div>
                     <div className="font-medium text-sm">{selectedPromotion.endDate}</div>
                   </div>
-
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <div className="text-sm text-gray-600 mb-1">Applicable To</div>
                     <div className="font-medium capitalize">{selectedPromotion.applicableTo}</div>
                     {selectedPromotion.categories && selectedPromotion.categories.length > 0 && (
-                      <div className="text-xs text-gray-600 mt-1">
-                        {selectedPromotion.categories.join(', ')}
-                      </div>
+                      <div className="text-xs text-gray-600 mt-1">{selectedPromotion.categories.join(', ')}</div>
                     )}
                   </div>
-
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <div className="text-sm text-gray-600 mb-1">Created Date</div>
                     <div className="font-medium">{selectedPromotion.createdDate}</div>
                   </div>
                 </div>
-
-                {/* Alert for expiring soon */}
                 {selectedPromotion.status === 'active' && (
                   <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                     <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
-                    <div className="flex-1">
+                    <div>
                       <div className="font-medium text-blue-900">Promotion is Active</div>
-                      <div className="text-sm text-blue-700 mt-1">
-                        This promotion is currently live and can be used by customers.
-                      </div>
+                      <div className="text-sm text-blue-700 mt-1">This promotion is live and can be used by customers.</div>
                     </div>
                   </div>
                 )}
@@ -788,21 +664,11 @@ export default function BrandPromotions() {
               <Button variant="outline" onClick={() => setShowViewModal(false)}>Close</Button>
               {selectedPromotion && selectedPromotion.status !== 'expired' && (
                 <>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowViewModal(false);
-                      handleEditClick(selectedPromotion);
-                    }}
-                  >
-                    <Edit2 className="w-4 h-4 mr-2" />
-                    Edit
+                  <Button variant="outline" onClick={() => { setShowViewModal(false); handleEditClick(selectedPromotion); }}>
+                    <Edit2 className="w-4 h-4 mr-2" /> Edit
                   </Button>
                   <Button
-                    onClick={() => {
-                      toggleStatus(selectedPromotion.id);
-                      setShowViewModal(false);
-                    }}
+                    onClick={() => { toggleStatus(selectedPromotion); setShowViewModal(false); }}
                     variant={selectedPromotion.status === 'active' ? 'outline' : 'default'}
                     className={selectedPromotion.status === 'active' ? '' : 'text-white'}
                     style={selectedPromotion.status === 'active' ? {} : { backgroundColor: '#BE220E' }}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
@@ -6,8 +6,9 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
-import { Search, Download, Eye, Edit2, RefreshCw, Package, Truck, CheckCircle, XCircle, Clock, DollarSign } from 'lucide-react';
+import { Search, Download, Eye, Edit2, RefreshCw, Package, Truck, CheckCircle, XCircle, Clock, DollarSign, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { api, ApiError } from '@/lib/api';
 
 interface Order {
   id: string;
@@ -26,77 +27,41 @@ interface Order {
 }
 
 export default function BrandOrders() {
-  const [orders, setOrders] = useState<Order[]>([
-    {
-      id: '1',
-      orderNumber: 'ORD-2024-001',
-      customer: 'John Doe',
-      customerEmail: 'john@example.com',
-      seller: 'VeeVill Hub',
-      sellerType: 'Brand',
-      products: [
-        { name: 'VeeVill Premium Rice', qty: 100, price: 45.99 },
-        { name: 'VeeVill Cooking Oil', qty: 50, price: 23.50 },
-      ],
-      totalAmount: 5774.00,
-      commission: 577.40,
-      status: 'delivered',
-      paymentStatus: 'paid',
-      date: '2024-01-10',
-      shippingAddress: '123 Main St, Lagos, Nigeria',
-    },
-    {
-      id: '2',
-      orderNumber: 'ORD-2024-002',
-      customer: 'Sarah Johnson',
-      customerEmail: 'sarah@example.com',
-      seller: 'Golden Pasta Co.',
-      sellerType: 'Manufacturer',
-      products: [
-        { name: 'Golden Pasta Spaghetti', qty: 200, price: 12.99 },
-      ],
-      totalAmount: 2598.00,
-      commission: 389.70,
-      status: 'shipped',
-      paymentStatus: 'paid',
-      date: '2024-01-12',
-      shippingAddress: '456 Oak Ave, Abuja, Nigeria',
-    },
-    {
-      id: '3',
-      orderNumber: 'ORD-2024-003',
-      customer: 'Michael Chen',
-      customerEmail: 'michael@example.com',
-      seller: 'Lagos Mega Store',
-      sellerType: 'Retailer',
-      products: [
-        { name: 'African Print Fabric Bundle', qty: 50, price: 89.99 },
-      ],
-      totalAmount: 4499.50,
-      commission: 539.94,
-      status: 'processing',
-      paymentStatus: 'paid',
-      date: '2024-01-14',
-      shippingAddress: '789 Palm Rd, Port Harcourt, Nigeria',
-    },
-    {
-      id: '4',
-      orderNumber: 'ORD-2024-004',
-      customer: 'Emma Wilson',
-      customerEmail: 'emma@example.com',
-      seller: 'VeeVill Hub',
-      sellerType: 'Brand',
-      products: [
-        { name: 'VeeVill Premium Rice', qty: 150, price: 45.99 },
-      ],
-      totalAmount: 6898.50,
-      commission: 689.85,
-      status: 'pending',
-      paymentStatus: 'pending',
-      date: '2024-01-15',
-      shippingAddress: '321 Beach Blvd, Lagos, Nigeria',
-    },
-  ]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadOrders = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<unknown>('/admin/orders');
+      const raw = ((res.data as Record<string, unknown>).orders || res.data) as Record<string, unknown>[];
+      setOrders((Array.isArray(raw) ? raw : []).map((o) => ({
+        id: o.id as string,
+        orderNumber: (o.order_number as string) || String(o.id).slice(0, 8).toUpperCase(),
+        customer: (o.user_name as string) || (o.customer_name as string) || 'Customer',
+        customerEmail: (o.user_email as string) || '',
+        seller: 'Anointed',
+        sellerType: 'Brand' as const,
+        products: (o.items as { product_name: string; quantity: number; price: number }[] || []).map((i) => ({
+          name: i.product_name,
+          qty: i.quantity,
+          price: Number(i.price),
+        })),
+        totalAmount: Number(o.total) || 0,
+        commission: Number(o.total) * 0.1 || 0,
+        status: (o.status as Order['status']) || 'pending',
+        paymentStatus: (o.payment_status as Order['paymentStatus']) || 'pending',
+        date: o.created_at ? new Date(o.created_at as string).toLocaleDateString() : '—',
+        shippingAddress: (o.shipping_address as string) || '—',
+      })));
+    } catch {
+      toast.error('Failed to load orders');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadOrders(); }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -131,13 +96,16 @@ export default function BrandOrders() {
     setShowEditModal(true);
   };
 
-  const handleUpdateStatus = () => {
+  const handleUpdateStatus = async () => {
     if (!selectedOrder) return;
-    setOrders(orders.map((o) =>
-      o.id === selectedOrder.id ? { ...o, status: newStatus as any } : o
-    ));
-    setShowEditModal(false);
-    toast.success('Order status updated successfully');
+    try {
+      await api.patch(`/admin/orders/${selectedOrder.id}/status`, { status: newStatus });
+      setOrders(orders.map((o) => o.id === selectedOrder.id ? { ...o, status: newStatus as Order['status'] } : o));
+      setShowEditModal(false);
+      toast.success('Order status updated successfully');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to update status');
+    }
   };
 
   const handleRefundClick = (order: Order) => {
@@ -145,15 +113,18 @@ export default function BrandOrders() {
     setShowRefundModal(true);
   };
 
-  const handleForceRefund = () => {
+  const handleForceRefund = async () => {
     if (!selectedOrder) return;
-    setOrders(orders.map((o) =>
-      o.id === selectedOrder.id
-        ? { ...o, status: 'refunded' as const, paymentStatus: 'refunded' as const }
-        : o
-    ));
-    setShowRefundModal(false);
-    toast.success('Refund processed successfully');
+    try {
+      await api.patch(`/admin/orders/${selectedOrder.id}/status`, { status: 'cancelled' });
+      setOrders(orders.map((o) =>
+        o.id === selectedOrder.id ? { ...o, status: 'refunded' as const, paymentStatus: 'refunded' as const } : o
+      ));
+      setShowRefundModal(false);
+      toast.success('Refund processed successfully');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to process refund');
+    }
   };
 
   const handleExport = () => {

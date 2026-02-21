@@ -1,12 +1,11 @@
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
-import { 
-  ShoppingCart, 
-  Package, 
-  Heart, 
-  TrendingUp, 
-  Clock,
+import {
+  ShoppingCart,
+  Package,
+  Heart,
+  TrendingUp,
   Tag,
   Star,
   Truck,
@@ -21,6 +20,7 @@ import { Link } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/lib/api';
 
 interface Product {
   id: string;
@@ -39,71 +39,75 @@ export default function BuyerDashboard() {
   const { cartCount, wishlistCount, addToCart, addToWishlist } = useCart();
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [recommendedProducts, setRecommendedProducts] = useState<Product[]>([]);
-  const [flashDeals, setFlashDeals] = useState<Product[]>([]);
+  const [dashStats, setDashStats] = useState<{ totalOrders?: number; activeOrders?: number } | null>(null);
 
   useEffect(() => {
-    // Load recent orders from localStorage
-    const orders = JSON.parse(localStorage.getItem('buyer_orders') || '[]');
-    setRecentOrders(orders.slice(0, 3));
+    // Load recent orders from API
+    api.get<unknown>('/orders?limit=3').then((res) => {
+      const data = res.data as Record<string, unknown>;
+      const orders = (data.orders || []) as Record<string, unknown>[];
+      setRecentOrders(orders.map((o) => ({
+        id: o.order_number || o.id,
+        items: (o.items as unknown[]) || [],
+        total: Number(o.total) || 0,
+        status: (o.status as string) || 'pending',
+        date: o.created_at,
+        estimatedDelivery: o.estimated_delivery,
+      })));
+    }).catch(() => {});
 
-    // Load products for recommendations
-    const storedProducts = JSON.parse(localStorage.getItem('products') || '[]');
-    
-    // Enhanced products with buyer-specific data
-    const enhancedProducts = storedProducts.map((p: any) => ({
-      ...p,
-      retailerName: p.retailerName || 'Test Retailer',
-      rating: p.rating || (Math.random() * 2 + 3).toFixed(1),
-      reviews: p.reviews || Math.floor(Math.random() * 500) + 50,
-      discount: p.discount || (Math.random() > 0.5 ? Math.floor(Math.random() * 30) + 10 : 0),
-    }));
+    // Load recommended products from shop
+    api.get<unknown>('/shop/products?limit=4').then((res) => {
+      const data = res.data as Record<string, unknown>;
+      const products = (data.products || []) as Record<string, unknown>[];
+      setRecommendedProducts(products.map((p) => ({
+        id: p.id as string,
+        name: (p.name as string) || '',
+        price: Number(p.regular_price) || 0,
+        images: p.image_url ? [p.image_url as string] : [],
+        category: '',
+        discount: p.sales_price ? Math.round((1 - Number(p.sales_price) / Number(p.regular_price)) * 100) : 0,
+      })));
+    }).catch(() => {});
 
-    // Get recommended products (random selection)
-    const recommended = enhancedProducts
-      .sort(() => Math.random() - 0.5)
-      .slice(0, 4);
-    setRecommendedProducts(recommended);
-
-    // Get flash deals (products with highest discount)
-    const deals = enhancedProducts
-      .filter((p: Product) => p.discount && p.discount > 0)
-      .sort((a: Product, b: Product) => (b.discount || 0) - (a.discount || 0))
-      .slice(0, 3);
-    setFlashDeals(deals);
+    // Load dashboard stats
+    api.get<unknown>('/buyer/dashboard').then((res) => {
+      setDashStats(res.data as Record<string, unknown>);
+    }).catch(() => {});
   }, []);
 
   const stats = [
-    { 
-      label: 'Active Orders', 
-      value: recentOrders.filter(o => o.status !== 'delivered').length.toString(), 
-      icon: ShoppingCart, 
-      color: '#BE220E', 
+    {
+      label: 'Active Orders',
+      value: recentOrders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled').length.toString(),
+      icon: ShoppingCart,
+      color: '#BE220E',
       description: 'In transit or processing',
-      link: '/buyer/orders' 
+      link: '/buyer/orders',
     },
-    { 
-      label: 'Wishlist Items', 
-      value: wishlistCount.toString(), 
-      icon: Heart, 
-      color: '#EC4899', 
+    {
+      label: 'Wishlist Items',
+      value: wishlistCount.toString(),
+      icon: Heart,
+      color: '#EC4899',
       description: 'Saved for later',
-      link: '/buyer/wishlist' 
+      link: '/buyer/wishlist',
     },
-    { 
-      label: 'Cart Items', 
-      value: cartCount.toString(), 
-      icon: ShoppingBag, 
-      color: '#2563EB', 
+    {
+      label: 'Cart Items',
+      value: cartCount.toString(),
+      icon: ShoppingBag,
+      color: '#2563EB',
       description: 'Ready to checkout',
-      link: '/buyer/cart' 
+      link: '/buyer/cart',
     },
-    { 
-      label: 'Total Orders', 
-      value: recentOrders.length.toString(), 
-      icon: Package, 
-      color: '#16A34A', 
+    {
+      label: 'Total Orders',
+      value: (dashStats as any)?.totalOrders?.toString() ?? '—',
+      icon: Package,
+      color: '#16A34A',
       description: 'All time purchases',
-      link: '/buyer/orders' 
+      link: '/buyer/orders',
     },
   ];
 
@@ -125,26 +129,11 @@ export default function BuyerDashboard() {
   };
 
   const handleAddToCart = (product: Product) => {
-    addToCart({
-      productId: product.id,
-      name: product.name,
-      price: product.discount ? product.price * (1 - product.discount / 100) : product.price,
-      quantity: 1,
-      image: product.images[0],
-      retailerId: '3',
-      retailerName: product.retailerName || 'Test Retailer',
-    });
+    addToCart(product.id, 1);
   };
 
   const handleAddToWishlist = (product: Product) => {
-    addToWishlist({
-      productId: product.id,
-      name: product.name,
-      price: product.price,
-      image: product.images[0],
-      retailerId: '3',
-      retailerName: product.retailerName || 'Test Retailer',
-    });
+    addToWishlist(product.id);
   };
 
   return (
@@ -278,51 +267,15 @@ export default function BuyerDashboard() {
                 <Button variant="outline" size="sm">View All</Button>
               </Link>
             </div>
-            
-            {flashDeals.length === 0 ? (
-              <div className="text-center py-8">
-                <Tag className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">No deals available right now</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {flashDeals.map((product) => (
-                  <Link key={product.id} to={`/buyer/product/${product.id}`}>
-                    <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer">
-                      <div className="w-20 h-20 bg-gray-200 rounded-lg flex-shrink-0 overflow-hidden relative">
-                        <img 
-                          src={product.images[0]} 
-                          alt={product.name}
-                          className="w-full h-full object-cover"
-                        />
-                        {product.discount > 0 && (
-                          <div className="absolute top-1 right-1 bg-[#BE220E] text-white px-2 py-0.5 rounded text-xs font-bold">
-                            -{product.discount}%
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate mb-1">{product.name}</div>
-                        <div className="flex items-center gap-1 mb-1">
-                          <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                          <span className="text-xs text-gray-600">
-                            {product.rating} ({product.reviews})
-                          </span>
-                        </div>
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-lg font-bold text-[#BE220E]">
-                            ₦{(product.price * (1 - (product.discount || 0) / 100)).toLocaleString()}
-                          </span>
-                          <span className="text-xs text-gray-500 line-through">
-                            ₦{product.price.toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
+            <div className="text-center py-8">
+              <Tag className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 mb-4">Check out our latest deals</p>
+              <Link to="/buyer/deals">
+                <Button className="bg-[#BE220E] hover:bg-[#9a1b0b]">
+                  <Zap className="w-4 h-4 mr-2" /> Explore Deals
+                </Button>
+              </Link>
+            </div>
           </Card>
         </div>
 

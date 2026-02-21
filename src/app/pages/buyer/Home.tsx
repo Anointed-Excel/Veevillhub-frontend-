@@ -143,26 +143,11 @@ export default function BuyerHome() {
   }, [searchQuery, selectedCategory, priceRange, sortBy, products]);
 
   const handleAddToCart = (product: Product) => {
-    addToCart({
-      productId: product.id,
-      name: product.name,
-      price: product.discount ? product.price * (1 - product.discount / 100) : product.price,
-      quantity: 1,
-      image: product.images[0],
-      retailerId: product.retailerId || '3',
-      retailerName: product.retailerName || 'Test Retailer',
-    });
+    addToCart(product.id, 1);
   };
 
   const handleAddToWishlist = (product: Product) => {
-    addToWishlist({
-      productId: product.id,
-      name: product.name,
-      price: product.price,
-      image: product.images[0],
-      retailerId: product.retailerId || '3',
-      retailerName: product.retailerName || 'Test Retailer',
-    });
+    addToWishlist(product.id);
   };
 
   const ProductCard = ({ product }: { product: Product }) => (
@@ -279,7 +264,7 @@ export default function BuyerHome() {
                 <div className="w-8 h-8 bg-[#BE220E] rounded-lg flex items-center justify-center">
                   <Home className="w-5 h-5 text-white" />
                 </div>
-                <span className="font-bold text-lg">VeeVill Hub</span>
+                <span className="font-bold text-lg">Anointed</span>
               </Link>
             </div>
 

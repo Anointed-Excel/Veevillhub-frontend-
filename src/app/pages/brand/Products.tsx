@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
@@ -9,100 +9,94 @@ import { Checkbox } from '@/app/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/app/components/ui/tabs';
-import { Plus, Search, Download, Eye, Edit2, Trash2, Upload, Package, Image as ImageIcon, Tag, X } from 'lucide-react';
+import { Plus, Search, Download, Eye, Trash2, Upload, Package, Image as ImageIcon, Tag, X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { api, ApiError } from '@/lib/api';
+
+interface Category {
+  id: string;
+  name: string;
+}
 
 interface Product {
   id: string;
   name: string;
   sku: string;
-  category: string;
+  categoryId: string;
+  categoryName: string;
   price: number;
   moq: number;
   stock: number;
-  status: 'active' | 'inactive' | 'out_of_stock';
-  seller: string;
-  sellerType: 'Brand' | 'Manufacturer' | 'Retailer';
+  status: 'active' | 'draft' | 'out_of_stock' | 'archived';
   image: string;
   commission: number;
   description?: string;
-  gallery?: string[];
   tags?: string[];
   brand?: string;
-  regularPrice?: number;
   salesPrice?: number;
-  trackInventory?: boolean;
-  weight?: string;
-  dimensions?: string;
-  shippingClass?: string;
-  linkedProducts?: string[];
   attributes?: { name: string; value: string }[];
 }
 
 export default function BrandProducts() {
-  const [products, setProducts] = useState<Product[]>([
-    {
-      id: '1',
-      name: 'VeeVill Premium Rice',
-      sku: 'VVH-RICE-001',
-      category: 'Food & Beverage',
-      price: 45.99,
-      moq: 100,
-      stock: 5000,
-      status: 'active',
-      seller: 'VeeVill Hub',
-      sellerType: 'Brand',
-      image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=200',
-      commission: 10,
-    },
-    {
-      id: '2',
-      name: 'Golden Pasta Spaghetti',
-      sku: 'MFG-PASTA-045',
-      category: 'Food & Beverage',
-      price: 12.99,
-      moq: 200,
-      stock: 8000,
-      status: 'active',
-      seller: 'Golden Pasta Co.',
-      sellerType: 'Manufacturer',
-      image: 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=200',
-      commission: 15,
-    },
-    {
-      id: '3',
-      name: 'African Print Fabric Bundle',
-      sku: 'RTL-FABRIC-234',
-      category: 'Textiles',
-      price: 89.99,
-      moq: 50,
-      stock: 0,
-      status: 'out_of_stock',
-      seller: 'Lagos Mega Store',
-      sellerType: 'Retailer',
-      image: 'https://images.unsplash.com/photo-1558769132-cb1aea9c5b0d?w=200',
-      commission: 12,
-    },
-    {
-      id: '4',
-      name: 'VeeVill Cooking Oil',
-      sku: 'VVH-OIL-002',
-      category: 'Food & Beverage',
-      price: 23.50,
-      moq: 150,
-      stock: 3200,
-      status: 'active',
-      seller: 'VeeVill Hub',
-      sellerType: 'Brand',
-      image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=200',
-      commission: 10,
-    },
-  ]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+
+  const loadProducts = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<unknown>('/products');
+      const data = res.data as Record<string, unknown>;
+      const raw = (data.products || []) as Record<string, unknown>[];
+      setProducts(raw.map((p) => ({
+        id: p.id as string,
+        name: (p.name as string) || '',
+        sku: (p.sku as string) || '',
+        categoryId: (p.category_id as string) || '',
+        categoryName: '',
+        price: Number(p.regular_price) || 0,
+        moq: Number(p.moq) || 1,
+        stock: Number(p.stock_quantity) || 0,
+        status: (p.status as Product['status']) || 'draft',
+        image: (p.image_url as string) || '',
+        commission: Number(p.platform_commission) || 0,
+        description: (p.description as string) || '',
+        tags: (p.tags as string[]) || [],
+        brand: (p.brand as string) || '',
+        salesPrice: p.sales_price ? Number(p.sales_price) : undefined,
+        attributes: (p.attributes as { name: string; value: string }[]) || [],
+      })));
+    } catch {
+      toast.error('Failed to load products');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadCategories = async () => {
+    try {
+      const res = await api.get<unknown>('/categories');
+      const data = res.data as Record<string, unknown>;
+      const raw = (data.categories || []) as Record<string, unknown>[];
+      setCategories(raw.map((c) => ({ id: c.id as string, name: (c.name as string) || '' })));
+    } catch {
+      // categories load failure is non-fatal
+    }
+  };
+
+  useEffect(() => {
+    loadProducts();
+    loadCategories();
+  }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [filterSeller, setFilterSeller] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
@@ -110,8 +104,7 @@ export default function BrandProducts() {
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     name: '',
-    sku: '',
-    category: 'Food & Beverage',
+    categoryId: '',
     moq: '',
     stock: '',
     commission: '10',
@@ -122,69 +115,63 @@ export default function BrandProducts() {
     salesPrice: '',
     trackInventory: true,
     weight: '',
-    dimensions: '',
     shippingClass: 'standard',
-    linkedProducts: [] as string[],
+    linkedSkus: [] as string[],
     attributes: [] as { name: string; value: string }[],
   });
   const [tagInput, setTagInput] = useState('');
   const [attributeInput, setAttributeInput] = useState({ name: '', value: '' });
 
-  const categories = ['Food & Beverage', 'Textiles', 'Electronics', 'Accessories', 'Beauty & Health', 'Home & Garden'];
-
   const filteredProducts = products.filter((product) => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         product.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         product.seller.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = filterCategory === 'all' || product.category === filterCategory;
+                         product.sku.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = filterCategory === 'all' || product.categoryId === filterCategory;
     const matchesStatus = filterStatus === 'all' || product.status === filterStatus;
-    const matchesSeller = filterSeller === 'all' || product.sellerType === filterSeller;
-    return matchesSearch && matchesCategory && matchesStatus && matchesSeller;
+    return matchesSearch && matchesCategory && matchesStatus;
   });
 
-  const handleCreate = () => {
-    if (!formData.name || !formData.sku || !formData.regularPrice || !formData.moq || !formData.stock) {
-      toast.error('Please fill in all required fields');
+  const handleCreate = async () => {
+    if (!formData.name || !formData.categoryId || !formData.regularPrice || !formData.moq || !formData.stock) {
+      toast.error('Please fill in all required fields (name, category, price, MOQ, stock)');
       return;
     }
+    setSaving(true);
+    try {
+      const body = new FormData();
+      body.append('name', formData.name);
+      body.append('description', formData.description || '');
+      body.append('categoryId', formData.categoryId);
+      body.append('brand', formData.brand || '');
+      body.append('regularPrice', formData.regularPrice);
+      if (formData.salesPrice) body.append('salesPrice', formData.salesPrice);
+      body.append('moq', formData.moq);
+      body.append('platformCommission', formData.commission);
+      body.append('stockQuantity', formData.stock);
+      body.append('trackInventory', String(formData.trackInventory));
+      if (formData.weight) body.append('weight', formData.weight);
+      body.append('shippingClass', formData.shippingClass);
+      body.append('tags', JSON.stringify(formData.tags));
+      body.append('linkedSkus', JSON.stringify(formData.linkedSkus));
+      body.append('attributes', JSON.stringify(formData.attributes));
+      if (imageFile) body.append('image', imageFile);
+      galleryFiles.forEach((f) => body.append('gallery', f));
 
-    const newProduct: Product = {
-      id: Date.now().toString(),
-      name: formData.name,
-      sku: formData.sku,
-      category: formData.category,
-      price: parseFloat(formData.salesPrice || formData.regularPrice),
-      moq: parseInt(formData.moq),
-      stock: parseInt(formData.stock),
-      status: 'active',
-      seller: 'VeeVill Hub',
-      sellerType: 'Brand',
-      image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200',
-      commission: parseFloat(formData.commission),
-      description: formData.description,
-      tags: formData.tags,
-      brand: formData.brand,
-      regularPrice: parseFloat(formData.regularPrice),
-      salesPrice: formData.salesPrice ? parseFloat(formData.salesPrice) : undefined,
-      trackInventory: formData.trackInventory,
-      weight: formData.weight,
-      dimensions: formData.dimensions,
-      shippingClass: formData.shippingClass,
-      linkedProducts: formData.linkedProducts,
-      attributes: formData.attributes,
-    };
-
-    setProducts([...products, newProduct]);
-    setShowCreateModal(false);
-    resetFormData();
-    toast.success('Product created successfully');
+      await api.post('/products', body);
+      toast.success('Product created successfully');
+      setShowCreateModal(false);
+      resetFormData();
+      loadProducts();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to create product');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const resetFormData = () => {
     setFormData({
       name: '',
-      sku: '',
-      category: 'Food & Beverage',
+      categoryId: '',
       moq: '',
       stock: '',
       commission: '10',
@@ -195,32 +182,37 @@ export default function BrandProducts() {
       salesPrice: '',
       trackInventory: true,
       weight: '',
-      dimensions: '',
       shippingClass: 'standard',
-      linkedProducts: [],
+      linkedSkus: [],
       attributes: [],
     });
     setTagInput('');
     setAttributeInput({ name: '', value: '' });
+    setImageFile(null);
+    setGalleryFiles([]);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this product?')) {
-      setProducts(products.filter((p) => p.id !== id));
-      toast.success('Product deleted successfully');
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this product?')) return;
+    try {
+      await api.delete(`/products/${id}`);
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+      toast.success('Product deleted');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to delete product');
     }
   };
 
-  const handleBulkDelete = () => {
-    if (selectedProducts.length === 0) {
-      toast.error('No products selected');
-      return;
-    }
-    
-    if (confirm(`Are you sure you want to delete ${selectedProducts.length} product(s)?`)) {
-      setProducts(products.filter((p) => !selectedProducts.includes(p.id)));
+  const handleBulkDelete = async () => {
+    if (selectedProducts.length === 0) { toast.error('No products selected'); return; }
+    if (!confirm(`Delete ${selectedProducts.length} product(s)?`)) return;
+    try {
+      await Promise.all(selectedProducts.map((id) => api.delete(`/products/${id}`)));
+      setProducts((prev) => prev.filter((p) => !selectedProducts.includes(p.id)));
       setSelectedProducts([]);
-      toast.success(`${selectedProducts.length} product(s) deleted successfully`);
+      toast.success(`${selectedProducts.length} product(s) deleted`);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to delete some products');
     }
   };
 
@@ -271,25 +263,32 @@ export default function BrandProducts() {
     setShowViewModal(true);
   };
 
-  const handleToggleStatus = (id: string) => {
-    setProducts(products.map((p) =>
-      p.id === id
-        ? { ...p, status: p.status === 'active' ? 'inactive' as const : 'active' as const }
-        : p
-    ));
-    toast.success('Product status updated');
+  const handleToggleStatus = async (product: Product) => {
+    const newStatus = product.status === 'active' ? 'draft' : 'active';
+    try {
+      await api.patch(`/products/${product.id}`, { status: newStatus });
+      setProducts((prev) => prev.map((p) =>
+        p.id === product.id ? { ...p, status: newStatus as Product['status'] } : p
+      ));
+      toast.success(`Product ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to update product status');
+    }
   };
 
   const handleBulkUpload = () => {
-    toast.success('Processing bulk upload...');
-    setTimeout(() => {
-      toast.success('50 products uploaded successfully');
-      setShowBulkUploadModal(false);
-    }, 2000);
+    toast.info('Bulk upload via CSV is coming soon');
+    setShowBulkUploadModal(false);
   };
 
   const handleExport = () => {
-    toast.success('Exporting products...');
+    const csv = ['SKU,Name,Category,Price,Stock,Status'].concat(
+      products.map((p) => `${p.sku},${p.name},${p.categoryName || p.categoryId},${p.price},${p.stock},${p.status}`)
+    ).join('\n');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    link.download = 'products.csv';
+    link.click();
   };
 
   return (
@@ -315,11 +314,11 @@ export default function BrandProducts() {
 
         {/* Filters */}
         <Card className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="relative md:col-span-2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <Input
-                placeholder="Search products, SKU, seller..."
+                placeholder="Search products or SKU..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -332,7 +331,7 @@ export default function BrandProducts() {
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
                 {categories.map((cat) => (
-                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -343,26 +342,16 @@ export default function BrandProducts() {
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
                 <SelectItem value="out_of_stock">Out of Stock</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterSeller} onValueChange={setFilterSeller}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seller" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Sellers</SelectItem>
-                <SelectItem value="Brand">Brand</SelectItem>
-                <SelectItem value="Manufacturer">Manufacturer</SelectItem>
-                <SelectItem value="Retailer">Retailer</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </Card>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="p-4">
             <div className="text-sm text-gray-600">Total Products</div>
             <div className="text-2xl font-bold mt-1">{products.length}</div>
@@ -371,12 +360,6 @@ export default function BrandProducts() {
             <div className="text-sm text-gray-600">Active</div>
             <div className="text-2xl font-bold mt-1 text-green-600">
               {products.filter((p) => p.status === 'active').length}
-            </div>
-          </Card>
-          <Card className="p-4">
-            <div className="text-sm text-gray-600">Brand Products</div>
-            <div className="text-2xl font-bold mt-1" style={{ color: '#BE220E' }}>
-              {products.filter((p) => p.sellerType === 'Brand').length}
             </div>
           </Card>
           <Card className="p-4">
@@ -419,16 +402,18 @@ export default function BrandProducts() {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Seller</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredProducts.map((product) => (
+                {loading ? (
+                  <tr><td colSpan={7} className="px-6 py-12 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" /></td></tr>
+                ) : filteredProducts.length === 0 ? (
+                  <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-500">No products found</td></tr>
+                ) : filteredProducts.map((product) => (
                   <tr key={product.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
                       <Checkbox
@@ -438,7 +423,13 @@ export default function BrandProducts() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center">
-                        <img src={product.image} alt={product.name} className="w-12 h-12 rounded-lg object-cover" />
+                        {product.image ? (
+                          <img src={product.image} alt={product.name} className="w-12 h-12 rounded-lg object-cover" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">
+                            <Package className="w-6 h-6 text-gray-400" />
+                          </div>
+                        )}
                         <div className="ml-4">
                           <div className="font-medium">{product.name}</div>
                           <div className="text-sm text-gray-500">MOQ: {product.moq} units</div>
@@ -449,10 +440,7 @@ export default function BrandProducts() {
                       <span className="font-mono text-sm">{product.sku}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm">{product.category}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="font-bold">${product.price}</div>
+                      <div className="font-bold">₦{product.price.toLocaleString()}</div>
                       <div className="text-xs text-gray-500">{product.commission}% commission</div>
                     </td>
                     <td className="px-6 py-4">
@@ -461,20 +449,10 @@ export default function BrandProducts() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm">{product.seller}</div>
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        product.sellerType === 'Brand' ? 'bg-red-100 text-red-700' :
-                        product.sellerType === 'Manufacturer' ? 'bg-blue-100 text-blue-700' :
-                        'bg-purple-100 text-purple-700'
-                      }`}>
-                        {product.sellerType}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                         product.status === 'active' ? 'bg-green-100 text-green-700' :
-                        product.status === 'inactive' ? 'bg-gray-100 text-gray-700' :
-                        'bg-red-100 text-red-700'
+                        product.status === 'out_of_stock' ? 'bg-red-100 text-red-700' :
+                        'bg-gray-100 text-gray-700'
                       }`}>
                         {product.status.replace('_', ' ')}
                       </span>
@@ -484,7 +462,7 @@ export default function BrandProducts() {
                         <Button onClick={() => handleView(product)} variant="ghost" size="sm">
                           <Eye className="w-4 h-4 text-blue-600" />
                         </Button>
-                        <Button onClick={() => handleToggleStatus(product.id)} variant="ghost" size="sm">
+                        <Button onClick={() => handleToggleStatus(product)} variant="ghost" size="sm">
                           <Package className={`w-4 h-4 ${product.status === 'active' ? 'text-gray-600' : 'text-green-600'}`} />
                         </Button>
                         <Button onClick={() => handleDelete(product.id)} variant="ghost" size="sm">
@@ -504,7 +482,7 @@ export default function BrandProducts() {
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
             <DialogHeader>
               <DialogTitle>Add New Product</DialogTitle>
-              <DialogDescription>Create a new product for VeeVill Hub</DialogDescription>
+              <DialogDescription>Create a new product for Anointed</DialogDescription>
             </DialogHeader>
             <Tabs defaultValue="general" className="w-full flex-1 overflow-hidden flex flex-col">
               <TabsList className="grid w-full grid-cols-6">
@@ -538,23 +516,14 @@ export default function BrandProducts() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="sku">SKU *</Label>
-                    <Input
-                      id="sku"
-                      value={formData.sku}
-                      onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                      placeholder="VVH-XXX-001"
-                    />
-                  </div>
-                  <div>
                     <Label htmlFor="category">Product Category *</Label>
-                    <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                    <Select value={formData.categoryId} onValueChange={(value) => setFormData({ ...formData, categoryId: value })}>
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder="Select a category" />
                       </SelectTrigger>
                       <SelectContent>
                         {categories.map((cat) => (
-                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                          <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -570,17 +539,42 @@ export default function BrandProducts() {
                   </div>
                   <div>
                     <Label>Product Image</Label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer">
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                    />
+                    <div
+                      className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                      onClick={() => imageInputRef.current?.click()}
+                    >
                       <ImageIcon className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                      <p className="text-sm text-gray-600 mb-2">Upload main product image</p>
+                      <p className="text-sm text-gray-600 mb-2">
+                        {imageFile ? imageFile.name : 'Upload main product image'}
+                      </p>
                       <Button variant="outline" size="sm" type="button">Browse Image</Button>
                     </div>
                   </div>
                   <div>
                     <Label>Product Gallery</Label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer">
+                    <input
+                      ref={galleryInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => setGalleryFiles(Array.from(e.target.files || []))}
+                    />
+                    <div
+                      className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                      onClick={() => galleryInputRef.current?.click()}
+                    >
                       <ImageIcon className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                      <p className="text-sm text-gray-600 mb-2">Upload multiple product images</p>
+                      <p className="text-sm text-gray-600 mb-2">
+                        {galleryFiles.length > 0 ? `${galleryFiles.length} file(s) selected` : 'Upload multiple product images'}
+                      </p>
                       <Button variant="outline" size="sm" type="button">Browse Images</Button>
                       <p className="text-xs text-gray-500 mt-2">Recommended: 800x800px, Max 5MB each</p>
                     </div>
@@ -589,7 +583,7 @@ export default function BrandProducts() {
 
                 <TabsContent value="pricing" className="space-y-4 mt-0">
                   <div>
-                    <Label htmlFor="regularPrice">Regular Price ($) *</Label>
+                    <Label htmlFor="regularPrice">Regular Price (₦) *</Label>
                     <Input
                       id="regularPrice"
                       type="number"
@@ -600,7 +594,7 @@ export default function BrandProducts() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="salesPrice">Sales Price ($)</Label>
+                    <Label htmlFor="salesPrice">Sales Price (₦)</Label>
                     <Input
                       id="salesPrice"
                       type="number"
@@ -634,11 +628,11 @@ export default function BrandProducts() {
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <div className="text-sm font-medium text-blue-900 mb-1">Price Summary</div>
                     <div className="text-xs text-blue-700 space-y-1">
-                      <div>Regular Price: ${formData.regularPrice || '0.00'}</div>
-                      <div>Sales Price: ${formData.salesPrice || 'N/A'}</div>
+                      <div>Regular Price: ₦{formData.regularPrice || '0.00'}</div>
+                      <div>Sales Price: {formData.salesPrice ? `₦${formData.salesPrice}` : 'N/A'}</div>
                       <div>Commission: {formData.commission || '0'}%</div>
                       <div className="font-medium pt-1 border-t border-blue-300">
-                        Net Price: ${formData.salesPrice 
+                        Net Price: ₦{formData.salesPrice
                           ? (parseFloat(formData.salesPrice) * (1 - parseFloat(formData.commission || '0') / 100)).toFixed(2)
                           : (parseFloat(formData.regularPrice || '0') * (1 - parseFloat(formData.commission || '0') / 100)).toFixed(2)
                         }
@@ -741,11 +735,11 @@ export default function BrandProducts() {
                     <p className="text-xs text-gray-500 mt-1">Add relevant keywords to improve product discoverability</p>
                   </div>
                   <div>
-                    <Label htmlFor="linkedProducts">Linked Products</Label>
+                    <Label htmlFor="linkedSkus">Linked Product SKUs</Label>
                     <Input
-                      id="linkedProducts"
-                      value={formData.linkedProducts.join(', ')}
-                      onChange={(e) => setFormData({ ...formData, linkedProducts: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                      id="linkedSkus"
+                      value={formData.linkedSkus.join(', ')}
+                      onChange={(e) => setFormData({ ...formData, linkedSkus: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
                       placeholder="Enter product SKUs separated by commas"
                     />
                     <p className="text-xs text-gray-500 mt-1">Link related products to show in recommendations</p>
@@ -800,7 +794,8 @@ export default function BrandProducts() {
             </Tabs>
             <DialogFooter className="mt-4">
               <Button variant="outline" onClick={() => { setShowCreateModal(false); resetFormData(); }}>Cancel</Button>
-              <Button onClick={handleCreate} className="text-white" style={{ backgroundColor: '#BE220E' }}>
+              <Button onClick={handleCreate} className="text-white" style={{ backgroundColor: '#BE220E' }} disabled={saving}>
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                 Create Product
               </Button>
             </DialogFooter>
@@ -816,20 +811,23 @@ export default function BrandProducts() {
             {selectedProduct && (
               <div className="space-y-4 max-h-[60vh] overflow-y-auto">
                 <div className="flex items-center gap-4 pb-4 border-b">
-                  <img src={selectedProduct.image} alt={selectedProduct.name} className="w-20 h-20 rounded-lg object-cover" />
+                  {selectedProduct.image ? (
+                    <img src={selectedProduct.image} alt={selectedProduct.name} className="w-20 h-20 rounded-lg object-cover" />
+                  ) : (
+                    <div className="w-20 h-20 rounded-lg bg-gray-100 flex items-center justify-center">
+                      <Package className="w-10 h-10 text-gray-400" />
+                    </div>
+                  )}
                   <div>
                     <div className="font-bold text-lg">{selectedProduct.name}</div>
                     <div className="text-sm text-gray-600">{selectedProduct.sku}</div>
+                    {selectedProduct.brand && <div className="text-sm text-gray-500">{selectedProduct.brand}</div>}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <div className="text-sm text-gray-600">Category</div>
-                    <div className="font-medium mt-1">{selectedProduct.category}</div>
-                  </div>
-                  <div>
                     <div className="text-sm text-gray-600">Price</div>
-                    <div className="font-bold mt-1" style={{ color: '#BE220E' }}>${selectedProduct.price}</div>
+                    <div className="font-bold mt-1" style={{ color: '#BE220E' }}>₦{selectedProduct.price.toLocaleString()}</div>
                   </div>
                   <div>
                     <div className="text-sm text-gray-600">MOQ</div>
@@ -838,14 +836,6 @@ export default function BrandProducts() {
                   <div>
                     <div className="text-sm text-gray-600">Stock</div>
                     <div className="font-medium mt-1">{selectedProduct.stock} units</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-600">Seller</div>
-                    <div className="font-medium mt-1">{selectedProduct.seller}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-600">Seller Type</div>
-                    <div className="font-medium mt-1">{selectedProduct.sellerType}</div>
                   </div>
                   <div>
                     <div className="text-sm text-gray-600">Commission</div>

@@ -147,26 +147,11 @@ export default function BuyerDeals() {
   }, [searchQuery, selectedDealType, sortBy, products]);
 
   const handleAddToCart = (product: Product) => {
-    addToCart({
-      productId: product.id,
-      name: product.name,
-      price: product.discount ? product.price * (1 - product.discount / 100) : product.price,
-      quantity: 1,
-      image: product.images[0],
-      retailerId: product.retailerId || '3',
-      retailerName: product.retailerName || 'Test Retailer',
-    });
+    addToCart(product.id, 1);
   };
 
   const handleAddToWishlist = (product: Product) => {
-    addToWishlist({
-      productId: product.id,
-      name: product.name,
-      price: product.price,
-      image: product.images[0],
-      retailerId: product.retailerId || '3',
-      retailerName: product.retailerName || 'Test Retailer',
-    });
+    addToWishlist(product.id);
   };
 
   const getDealTypeColor = (dealType?: string) => {

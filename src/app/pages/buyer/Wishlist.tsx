@@ -134,8 +134,6 @@ export default function Wishlist() {
                   </h3>
                 </Link>
 
-                <p className="text-xs text-gray-600 mb-2">{item.retailerName}</p>
-
                 <p className="text-xl font-bold text-[#BE220E] mb-3">
                   ₦{item.price.toLocaleString()}
                 </p>

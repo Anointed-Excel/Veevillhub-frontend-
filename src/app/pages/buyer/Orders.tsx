@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/lib/api';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import { Input } from '@/app/components/ui/input';
@@ -52,11 +53,24 @@ export default function BuyerOrders() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   useEffect(() => {
-    // Load orders from localStorage
-    const storedOrders = JSON.parse(localStorage.getItem('buyer_orders') || '[]');
-    const userOrders = storedOrders.filter((o: Order) => o.userId === user?.id);
-    setOrders(userOrders);
-    setFilteredOrders(userOrders);
+    api.get<unknown>('/orders').then((res) => {
+      const data = res.data as Record<string, unknown>;
+      const raw = (data.orders || []) as Record<string, unknown>[];
+      const mapped: Order[] = raw.map((o) => ({
+        id: (o.order_number as string) || (o.id as string),
+        items: (o.items as any[]) || [],
+        subtotal: Number(o.subtotal) || 0,
+        shippingFee: Number(o.shipping_fee) || 0,
+        total: Number(o.total) || 0,
+        status: (o.status as Order['status']) || 'pending',
+        createdAt: (o.created_at as string) || '',
+        estimatedDelivery: (o.estimated_delivery as string) || '',
+        shippingAddress: o.shipping_address || {},
+        paymentMethod: (o.payment_method as string) || '',
+      }));
+      setOrders(mapped);
+      setFilteredOrders(mapped);
+    }).catch(() => {});
   }, [user]);
 
   useEffect(() => {

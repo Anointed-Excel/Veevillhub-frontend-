@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
-import { Search, Download, Eye, Trash2, Ban, CheckCircle, ShoppingBag, Mail, Phone } from 'lucide-react';
+import { Search, Download, Eye, Trash2, Ban, CheckCircle, ShoppingBag, Mail, Phone, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { api, ApiError } from '@/lib/api';
 
 interface Buyer {
   id: string;
@@ -22,68 +23,34 @@ interface Buyer {
 }
 
 export default function BrandBuyers() {
-  const [buyers, setBuyers] = useState<Buyer[]>([
-    {
-      id: '1',
-      name: 'John Doe',
-      email: 'john@example.com',
-      phone: '+234 800 123 4567',
-      status: 'active',
-      totalOrders: 45,
-      totalSpent: '$12,450',
-      lastOrder: '2 days ago',
-      joinedDate: '2024-01-15',
-      verified: true,
-    },
-    {
-      id: '2',
-      name: 'Sarah Johnson',
-      email: 'sarah@example.com',
-      phone: '+234 800 234 5678',
-      status: 'active',
-      totalOrders: 32,
-      totalSpent: '$8,920',
-      lastOrder: '1 week ago',
-      joinedDate: '2024-02-10',
-      verified: true,
-    },
-    {
-      id: '3',
-      name: 'Michael Chen',
-      email: 'michael@example.com',
-      phone: '+234 800 345 6789',
-      status: 'active',
-      totalOrders: 67,
-      totalSpent: '$18,340',
-      lastOrder: '1 day ago',
-      joinedDate: '2023-12-05',
-      verified: true,
-    },
-    {
-      id: '4',
-      name: 'Emma Wilson',
-      email: 'emma@example.com',
-      phone: '+234 800 456 7890',
-      status: 'suspended',
-      totalOrders: 12,
-      totalSpent: '$2,340',
-      lastOrder: '2 months ago',
-      joinedDate: '2024-03-20',
-      verified: false,
-    },
-    {
-      id: '5',
-      name: 'David Brown',
-      email: 'david@example.com',
-      phone: '+234 800 567 8901',
-      status: 'active',
-      totalOrders: 89,
-      totalSpent: '$23,780',
-      lastOrder: '3 hours ago',
-      joinedDate: '2023-11-12',
-      verified: true,
-    },
-  ]);
+  const [buyers, setBuyers] = useState<Buyer[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadBuyers = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<{ buyers: Record<string, unknown>[] }>('/admin/buyers');
+      const rawBuyers = (res.data as unknown as { buyers: Record<string, unknown>[] }).buyers || [];
+      setBuyers(rawBuyers.map((b) => ({
+        id: b.id as string,
+        name: (b.full_name as string) || '',
+        email: (b.email as string) || '',
+        phone: (b.phone_number as string) || '—',
+        status: (b.status === 'active' ? 'active' : 'suspended') as Buyer['status'],
+        totalOrders: (b.total_orders as number) || 0,
+        totalSpent: `₦${((b.total_spent as number) || 0).toLocaleString()}`,
+        lastOrder: b.last_order_date ? new Date(b.last_order_date as string).toLocaleDateString() : 'Never',
+        joinedDate: b.created_at ? new Date(b.created_at as string).toLocaleDateString() : '—',
+        verified: !!(b.is_verified),
+      })));
+    } catch {
+      toast.error('Failed to load buyers');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadBuyers(); }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -98,27 +65,29 @@ export default function BrandBuyers() {
     return matchesSearch && matchesStatus;
   });
 
-  const handleSuspend = (id: string) => {
-    if (confirm('Are you sure you want to suspend this buyer account?')) {
-      setBuyers(buyers.map((b) =>
-        b.id === id ? { ...b, status: 'suspended' as const } : b
-      ));
+  const handleSuspend = async (id: string) => {
+    if (!confirm('Are you sure you want to suspend this buyer account?')) return;
+    try {
+      await api.patch(`/admin/buyers/${id}/status`, { status: 'suspended' });
+      setBuyers(buyers.map((b) => b.id === id ? { ...b, status: 'suspended' as const } : b));
       toast.success('Buyer account suspended');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to suspend buyer');
     }
   };
 
-  const handleActivate = (id: string) => {
-    setBuyers(buyers.map((b) =>
-      b.id === id ? { ...b, status: 'active' as const } : b
-    ));
-    toast.success('Buyer account activated');
+  const handleActivate = async (id: string) => {
+    try {
+      await api.patch(`/admin/buyers/${id}/status`, { status: 'active' });
+      setBuyers(buyers.map((b) => b.id === id ? { ...b, status: 'active' as const } : b));
+      toast.success('Buyer account activated');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to activate buyer');
+    }
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this buyer? All their data will be permanently removed.')) {
-      setBuyers(buyers.filter((b) => b.id !== id));
-      toast.success('Buyer account deleted');
-    }
+    toast.error('Delete is not supported — suspend the account instead');
   };
 
   const handleView = (buyer: Buyer) => {

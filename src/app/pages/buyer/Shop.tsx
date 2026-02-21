@@ -1,5 +1,6 @@
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { useCart } from '@/contexts/CartContext';
+import { api } from '@/lib/api';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -17,134 +18,135 @@ import {
   Tag,
   Home,
   Package,
+  Loader2,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 
 interface Product {
   id: string;
   name: string;
-  description: string;
   price: number;
   images: string[];
-  category: string;
-  retailerId?: string;
-  retailerName?: string;
-  manufacturerId?: string;
-  manufacturerName?: string;
+  categoryId?: string;
+  brand?: string;
   rating?: number;
   reviews?: number;
   inStock?: boolean;
   discount?: number;
 }
 
-const categories = [
-  { id: 'all', name: 'All Products', icon: Grid },
-  { id: 'fashion', name: 'Fashion', icon: Sparkles },
-  { id: 'electronics', name: 'Electronics', icon: Package },
-  { id: 'home', name: 'Home & Living', icon: Home },
-  { id: 'beauty', name: 'Beauty', icon: Star },
-  { id: 'sports', name: 'Sports', icon: TrendingUp },
-];
+interface Category {
+  id: string;
+  name: string;
+}
 
 export default function BuyerShop() {
   const { addToCart, addToWishlist } = useCart();
   const [products, setProducts] = useState<Product[]>([]);
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [totalResults, setTotalResults] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 10000]);
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 0]);
   const [sortBy, setSortBy] = useState('featured');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadProducts = (overrides?: Record<string, unknown>) => {
+    setLoading(true);
+
+    const sortMap: Record<string, { sortBy: string; sortOrder: string }> = {
+      'price-low': { sortBy: 'regular_price', sortOrder: 'asc' },
+      'price-high': { sortBy: 'regular_price', sortOrder: 'desc' },
+      'rating': { sortBy: 'created_at', sortOrder: 'desc' },
+      'popular': { sortBy: 'created_at', sortOrder: 'desc' },
+      'featured': { sortBy: 'created_at', sortOrder: 'desc' },
+    };
+    const sort = sortMap[sortBy] || sortMap['featured'];
+
+    const params = new URLSearchParams();
+    params.set('limit', '40');
+    if (searchQuery) params.set('search', searchQuery);
+    if (selectedCategory !== 'all') params.set('category', selectedCategory);
+    if (priceRange[0] > 0) params.set('minPrice', String(priceRange[0]));
+    if (priceRange[1] > 0) params.set('maxPrice', String(priceRange[1]));
+    params.set('sortBy', sort.sortBy);
+    params.set('sortOrder', sort.sortOrder);
+
+    // Apply any overrides
+    if (overrides) {
+      Object.entries(overrides).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) params.set(k, String(v));
+        else params.delete(k);
+      });
+    }
+
+    api.get<unknown>(`/shop/products?${params.toString()}`).then((res) => {
+      const data = res.data as Record<string, unknown>;
+      const raw = (data.products || []) as Record<string, unknown>[];
+      const pagination = (data.pagination || {}) as Record<string, unknown>;
+      setTotalResults(Number(pagination.totalResults) || raw.length);
+
+      const mapped: Product[] = raw.map((p) => {
+        const regularPrice = Number(p.regular_price) || 0;
+        const salesPrice = Number(p.sales_price) || 0;
+        const discount = salesPrice > 0 && salesPrice < regularPrice
+          ? Math.round((1 - salesPrice / regularPrice) * 100)
+          : 0;
+        return {
+          id: (p.id as string) || '',
+          name: (p.name as string) || '',
+          price: regularPrice,
+          images: [(p.image_url as string) || ''],
+          categoryId: (p.category_id as string) || '',
+          brand: (p.brand as string) || '',
+          rating: Number(p.rating) || parseFloat((Math.random() * 2 + 3).toFixed(1)),
+          reviews: Number(p.reviews) || Math.floor(Math.random() * 200) + 10,
+          inStock: (p.status as string) === 'active',
+          discount,
+        };
+      });
+      setProducts(mapped);
+    }).catch(() => {}).finally(() => setLoading(false));
+  };
 
   useEffect(() => {
-    // Load products from localStorage
-    const storedProducts = JSON.parse(localStorage.getItem('products') || '[]');
-    
-    // Enhance products with additional buyer-specific data
-    const enhancedProducts = storedProducts.map((p: any) => ({
-      ...p,
-      retailerId: p.retailerId || '3',
-      retailerName: p.retailerName || 'Test Retailer',
-      rating: p.rating || (Math.random() * 2 + 3).toFixed(1),
-      reviews: p.reviews || Math.floor(Math.random() * 500) + 50,
-      inStock: p.stock > 0,
-      discount: p.discount || (Math.random() > 0.7 ? Math.floor(Math.random() * 30) + 10 : 0),
-    }));
+    api.get<unknown>('/shop/categories').then((res) => {
+      const data = res.data as Record<string, unknown>;
+      const raw = (data.categories || []) as Record<string, unknown>[];
+      const flat: Category[] = [];
+      const flatten = (items: Record<string, unknown>[]) => {
+        items.forEach((c) => {
+          flat.push({ id: c.id as string, name: c.name as string });
+          if (c.children) flatten(c.children as Record<string, unknown>[]);
+        });
+      };
+      flatten(raw);
+      setCategories(flat);
+    }).catch(() => {});
 
-    setProducts(enhancedProducts);
-    setFilteredProducts(enhancedProducts);
+    loadProducts();
   }, []);
 
   useEffect(() => {
-    let filtered = products;
-
-    // Apply search filter
-    if (searchQuery) {
-      filtered = filtered.filter(
-        (p) =>
-          p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          p.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          p.category.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    // Apply category filter
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter((p) =>
-        p.category.toLowerCase().includes(selectedCategory)
-      );
-    }
-
-    // Apply price range filter
-    filtered = filtered.filter(
-      (p) => p.price >= priceRange[0] && p.price <= priceRange[1]
-    );
-
-    // Apply sorting
-    switch (sortBy) {
-      case 'price-low':
-        filtered = [...filtered].sort((a, b) => a.price - b.price);
-        break;
-      case 'price-high':
-        filtered = [...filtered].sort((a, b) => b.price - a.price);
-        break;
-      case 'rating':
-        filtered = [...filtered].sort((a, b) => (b.rating || 0) - (a.rating || 0));
-        break;
-      case 'popular':
-        filtered = [...filtered].sort((a, b) => (b.reviews || 0) - (a.reviews || 0));
-        break;
-      default:
-        // Featured - no additional sorting
-        break;
-    }
-
-    setFilteredProducts(filtered);
-  }, [searchQuery, selectedCategory, priceRange, sortBy, products]);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      loadProducts();
+    }, 400);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [searchQuery, selectedCategory, priceRange, sortBy]);
 
   const handleAddToCart = (product: Product) => {
-    addToCart({
-      productId: product.id,
-      name: product.name,
-      price: product.discount ? product.price * (1 - product.discount / 100) : product.price,
-      quantity: 1,
-      image: product.images[0],
-      retailerId: product.retailerId || '3',
-      retailerName: product.retailerName || 'Test Retailer',
-    });
+    addToCart(product.id, 1);
   };
 
   const handleAddToWishlist = (product: Product) => {
-    addToWishlist({
-      productId: product.id,
-      name: product.name,
-      price: product.price,
-      image: product.images[0],
-      retailerId: product.retailerId || '3',
-      retailerName: product.retailerName || 'Test Retailer',
-    });
+    addToWishlist(product.id);
   };
 
   return (
@@ -154,7 +156,7 @@ export default function BuyerShop() {
         <div className="bg-gradient-to-r from-[#BE220E] to-[#9a1b0b] rounded-xl p-6 text-white">
           <h1 className="text-3xl font-bold mb-2">Shop Products</h1>
           <p className="text-white/90 mb-4">Discover amazing products from trusted retailers</p>
-          
+
           {/* Search bar */}
           <div className="relative max-w-xl">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -170,23 +172,30 @@ export default function BuyerShop() {
 
         {/* Categories */}
         <div className="flex gap-2 overflow-x-auto pb-2">
-          {categories.map((cat) => {
-            const Icon = cat.icon;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition ${
-                  selectedCategory === cat.id
-                    ? 'bg-[#BE220E] text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {cat.name}
-              </button>
-            );
-          })}
+          <button
+            onClick={() => setSelectedCategory('all')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition ${
+              selectedCategory === 'all'
+                ? 'bg-[#BE220E] text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <Grid className="w-4 h-4" />
+            All Products
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`px-4 py-2 rounded-lg whitespace-nowrap transition ${
+                selectedCategory === cat.id
+                  ? 'bg-[#BE220E] text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {cat.name}
+            </button>
+          ))}
         </div>
 
         {/* Filters and Sort Bar */}
@@ -202,7 +211,11 @@ export default function BuyerShop() {
               Filters
             </Button>
             <p className="text-sm text-gray-600">
-              {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''}
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin inline" />
+              ) : (
+                `${totalResults} product${totalResults !== 1 ? 's' : ''}`
+              )}
             </p>
           </div>
 
@@ -265,7 +278,7 @@ export default function BuyerShop() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setPriceRange([0, 10000])}
+                    onClick={() => setPriceRange([0, 0])}
                   >
                     Reset
                   </Button>
@@ -276,7 +289,7 @@ export default function BuyerShop() {
         )}
 
         {/* Products Grid/List */}
-        {filteredProducts.length === 0 ? (
+        {!loading && products.length === 0 ? (
           <Card className="p-12 text-center">
             <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-xl font-semibold mb-2">No products found</h3>
@@ -287,7 +300,7 @@ export default function BuyerShop() {
               onClick={() => {
                 setSearchQuery('');
                 setSelectedCategory('all');
-                setPriceRange([0, 10000]);
+                setPriceRange([0, 0]);
               }}
               className="bg-[#BE220E] hover:bg-[#9a1b0b]"
             >
@@ -302,7 +315,12 @@ export default function BuyerShop() {
                 : 'space-y-4'
             }
           >
-            {filteredProducts.map((product) => (
+            {loading && products.length === 0 && (
+              <div className="col-span-full flex justify-center py-16">
+                <Loader2 className="w-10 h-10 animate-spin text-[#BE220E]" />
+              </div>
+            )}
+            {products.map((product) => (
               <Card
                 key={product.id}
                 className={`overflow-hidden hover:shadow-lg transition group ${
@@ -359,10 +377,12 @@ export default function BuyerShop() {
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2 mb-2 text-xs text-gray-600">
-                    <MapPin className="w-3 h-3" />
-                    <span>{product.retailerName}</span>
-                  </div>
+                  {product.brand && (
+                    <div className="flex items-center gap-2 mb-2 text-xs text-gray-600">
+                      <MapPin className="w-3 h-3" />
+                      <span>{product.brand}</span>
+                    </div>
+                  )}
 
                   <div className="flex items-baseline gap-2 mb-3">
                     {product.discount > 0 ? (
