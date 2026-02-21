@@ -5,12 +5,10 @@ import { Input } from '@/app/components/ui/input';
 import {
   Zap,
   Tag,
-  Star,
   ShoppingCart,
   Heart,
   TrendingUp,
   Clock,
-  MapPin,
   Percent,
   Gift,
   Search,
@@ -19,22 +17,17 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
+import { api } from '@/lib/api';
 import { useState, useEffect } from 'react';
 
 interface Product {
   id: string;
   name: string;
-  description: string;
   price: number;
   images: string[];
-  category: string;
-  retailerId?: string;
-  retailerName?: string;
-  rating?: number;
-  reviews?: number;
-  discount?: number;
-  dealEndTime?: string;
-  dealType?: 'flash' | 'daily' | 'weekly' | 'clearance';
+  discount: number;
+  dealEndTime: string;
+  dealType: 'flash' | 'daily' | 'weekly' | 'clearance';
 }
 
 export default function BuyerDeals() {
@@ -47,49 +40,44 @@ export default function BuyerDeals() {
   const [sortBy, setSortBy] = useState('discount-high');
 
   useEffect(() => {
-    // Load products from localStorage
-    const storedProducts = JSON.parse(localStorage.getItem('products') || '[]');
-    
-    // Enhanced products with deals data
-    const enhancedProducts = storedProducts
-      .map((p: any) => {
-        const discount = Math.floor(Math.random() * 60) + 15; // 15-75% discount
-        const dealTypes: ('flash' | 'daily' | 'weekly' | 'clearance')[] = ['flash', 'daily', 'weekly', 'clearance'];
-        const dealType = dealTypes[Math.floor(Math.random() * dealTypes.length)];
-        
-        // Calculate deal end time based on type
-        const now = new Date();
-        let endTime;
-        switch (dealType) {
-          case 'flash':
-            endTime = new Date(now.getTime() + Math.random() * 6 * 60 * 60 * 1000); // 0-6 hours
-            break;
-          case 'daily':
-            endTime = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
-            break;
-          case 'weekly':
-            endTime = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
-            break;
-          case 'clearance':
-            endTime = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
-            break;
-        }
+    const dealTypes: ('flash' | 'daily' | 'weekly' | 'clearance')[] = ['flash', 'daily', 'weekly', 'clearance'];
+    const dealDurations = {
+      flash: 6 * 60 * 60 * 1000,
+      daily: 24 * 60 * 60 * 1000,
+      weekly: 7 * 24 * 60 * 60 * 1000,
+      clearance: 30 * 24 * 60 * 60 * 1000,
+    };
 
-        return {
-          ...p,
-          retailerId: p.retailerId || '3',
-          retailerName: p.retailerName || 'Test Retailer',
-          rating: p.rating || (Math.random() * 2 + 3).toFixed(1),
-          reviews: p.reviews || Math.floor(Math.random() * 500) + 50,
-          discount,
-          dealType,
-          dealEndTime: endTime.toISOString(),
-        };
-      })
-      .filter((p: Product) => p.discount > 0); // Only show products with discounts
+    api.get<unknown>('/shop/products?limit=100').then((res) => {
+      const data = res.data as Record<string, unknown>;
+      const raw = (data.products || []) as Record<string, unknown>[];
+      const now = new Date();
 
-    setProducts(enhancedProducts);
-    setFilteredProducts(enhancedProducts);
+      const deals: Product[] = raw
+        .filter((p) => p.sales_price && Number(p.sales_price) > 0 && Number(p.sales_price) < Number(p.regular_price))
+        .map((p) => {
+          const regularPrice = Number(p.regular_price) || 0;
+          const salesPrice = Number(p.sales_price) || 0;
+          const discount = Math.round((1 - salesPrice / regularPrice) * 100);
+          const dealType = dealTypes[Math.floor(Math.random() * dealTypes.length)];
+          const endTime = new Date(now.getTime() + dealDurations[dealType]);
+          const gallery = Array.isArray(p.gallery) ? (p.gallery as string[]) : [];
+          const images = [(p.image_url as string) || '', ...gallery].filter(Boolean);
+
+          return {
+            id: (p.id as string) || '',
+            name: (p.name as string) || '',
+            price: regularPrice,
+            images: images.length > 0 ? images : ['/placeholder.png'],
+            discount,
+            dealType,
+            dealEndTime: endTime.toISOString(),
+          };
+        });
+
+      setProducts(deals);
+      setFilteredProducts(deals);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -97,11 +85,8 @@ export default function BuyerDeals() {
 
     // Apply search filter
     if (searchQuery) {
-      filtered = filtered.filter(
-        (p) =>
-          p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          p.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          p.category.toLowerCase().includes(searchQuery.toLowerCase())
+      filtered = filtered.filter((p) =>
+        p.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
@@ -371,18 +356,6 @@ export default function BuyerDeals() {
                         {product.name}
                       </h3>
                     </Link>
-
-                    <div className="flex items-center gap-1 mb-2">
-                      <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                      <span className="text-xs text-gray-600">
-                        {product.rating} ({product.reviews})
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 mb-2 text-xs text-gray-600">
-                      <MapPin className="w-3 h-3" />
-                      <span>{product.retailerName}</span>
-                    </div>
 
                     {/* Deal Timer */}
                     <div className="flex items-center gap-2 mb-3 text-xs">

@@ -9,7 +9,7 @@ import { Checkbox } from '@/app/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/app/components/ui/tabs';
-import { Plus, Search, Download, Eye, Trash2, Upload, Package, Image as ImageIcon, Tag, X, Loader2 } from 'lucide-react';
+import { Plus, Search, Download, Eye, Trash2, Upload, Package, Image as ImageIcon, Tag, X, Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
 
@@ -100,6 +100,8 @@ export default function BrandProducts() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
+  const [showRestockModal, setShowRestockModal] = useState(false);
+  const [restockQuantity, setRestockQuantity] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [formData, setFormData] = useState({
@@ -273,6 +275,33 @@ export default function BrandProducts() {
       toast.success(`Product ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Failed to update product status');
+    }
+  };
+
+  const openRestock = (product: Product) => {
+    setSelectedProduct(product);
+    setRestockQuantity('');
+    setShowRestockModal(true);
+  };
+
+  const handleRestock = async () => {
+    if (!selectedProduct) return;
+    const qty = parseInt(restockQuantity, 10);
+    if (!qty || qty <= 0) { toast.error('Enter a valid quantity'); return; }
+    setSaving(true);
+    try {
+      await api.patch(`/products/${selectedProduct.id}/restock`, { quantity: qty });
+      setProducts((prev) => prev.map((p) =>
+        p.id === selectedProduct.id
+          ? { ...p, stock: p.stock + qty, status: 'active' as const }
+          : p
+      ));
+      toast.success(`Restocked ${selectedProduct.name} with ${qty} units`);
+      setShowRestockModal(false);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to restock product');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -459,13 +488,16 @@ export default function BrandProducts() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <Button onClick={() => handleView(product)} variant="ghost" size="sm">
+                        <Button onClick={() => handleView(product)} variant="ghost" size="sm" title="View">
                           <Eye className="w-4 h-4 text-blue-600" />
                         </Button>
-                        <Button onClick={() => handleToggleStatus(product)} variant="ghost" size="sm">
+                        <Button onClick={() => handleToggleStatus(product)} variant="ghost" size="sm" title={product.status === 'active' ? 'Deactivate' : 'Activate'}>
                           <Package className={`w-4 h-4 ${product.status === 'active' ? 'text-gray-600' : 'text-green-600'}`} />
                         </Button>
-                        <Button onClick={() => handleDelete(product.id)} variant="ghost" size="sm">
+                        <Button onClick={() => openRestock(product)} variant="ghost" size="sm" title="Restock">
+                          <RefreshCw className="w-4 h-4 text-orange-500" />
+                        </Button>
+                        <Button onClick={() => handleDelete(product.id)} variant="ghost" size="sm" title="Delete">
                           <Trash2 className="w-4 h-4 text-red-600" />
                         </Button>
                       </div>
@@ -916,6 +948,37 @@ export default function BrandProducts() {
               <Button variant="outline" onClick={() => setShowBulkUploadModal(false)}>Cancel</Button>
               <Button onClick={handleBulkUpload} className="text-white" style={{ backgroundColor: '#BE220E' }}>
                 Upload Products
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Restock Modal */}
+        <Dialog open={showRestockModal} onOpenChange={setShowRestockModal}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Restock Product</DialogTitle>
+              <DialogDescription>
+                {selectedProduct?.name} — current stock: {selectedProduct?.stock ?? 0} units
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-2">
+              <Label htmlFor="restockQty">Quantity to add *</Label>
+              <Input
+                id="restockQty"
+                type="number"
+                min="1"
+                value={restockQuantity}
+                onChange={(e) => setRestockQuantity(e.target.value)}
+                placeholder="e.g. 50"
+                className="mt-1"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowRestockModal(false)}>Cancel</Button>
+              <Button onClick={handleRestock} disabled={saving} className="text-white" style={{ backgroundColor: '#BE220E' }}>
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                Restock
               </Button>
             </DialogFooter>
           </DialogContent>
