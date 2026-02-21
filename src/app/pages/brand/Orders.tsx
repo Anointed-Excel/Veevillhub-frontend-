@@ -26,6 +26,22 @@ interface Order {
   shippingAddress: string;
 }
 
+interface OrderDetail {
+  id: string;
+  orderNumber: string;
+  status: string;
+  paymentStatus: string;
+  date: string;
+  subtotal: number;
+  shippingFee: number;
+  discount: number;
+  total: number;
+  promoCode: string | null;
+  buyer: { full_name: string; email: string; phone_number: string } | null;
+  shippingAddress: { full_name: string; phone_number: string; street_address: string; city: string; state: string; zipcode: string } | null;
+  items: { id: string; product_name: string; product_sku: string; product_image: string; quantity: number; price: number; total: number }[];
+}
+
 export default function BrandOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +89,8 @@ export default function BrandOrders() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedOrderDetail, setSelectedOrderDetail] = useState<OrderDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [newStatus, setNewStatus] = useState('');
 
   const filteredOrders = orders.filter((order) => {
@@ -85,9 +103,56 @@ export default function BrandOrders() {
     return matchesSearch && matchesStatus && matchesPayment && matchesSeller;
   });
 
-  const handleView = (order: Order) => {
+  const handleView = async (order: Order) => {
     setSelectedOrder(order);
+    setSelectedOrderDetail(null);
     setShowViewModal(true);
+    setDetailLoading(true);
+    try {
+      const res = await api.get<unknown>(`/admin/orders/${order.id}`);
+      const d = res.data as Record<string, unknown>;
+      const addr = d.shipping_address as Record<string, unknown> | null;
+      const buyer = d.buyer as Record<string, unknown> | null;
+      const rawItems = (d.items as Record<string, unknown>[]) || [];
+      setSelectedOrderDetail({
+        id: d.id as string,
+        orderNumber: (d.order_number as string) || order.orderNumber,
+        status: (d.status as string) || order.status,
+        paymentStatus: (d.payment_status as string) || order.paymentStatus,
+        date: d.created_at ? new Date(d.created_at as string).toLocaleDateString() : order.date,
+        subtotal: Number(d.subtotal) || 0,
+        shippingFee: Number(d.shipping_fee) || 0,
+        discount: Number(d.discount) || 0,
+        total: Number(d.total) || order.totalAmount,
+        promoCode: (d.promo_code as string) || null,
+        buyer: buyer ? {
+          full_name: buyer.full_name as string,
+          email: buyer.email as string,
+          phone_number: buyer.phone_number as string,
+        } : null,
+        shippingAddress: addr ? {
+          full_name: addr.full_name as string,
+          phone_number: addr.phone_number as string,
+          street_address: addr.street_address as string,
+          city: addr.city as string,
+          state: addr.state as string,
+          zipcode: addr.zipcode as string,
+        } : null,
+        items: rawItems.map((i) => ({
+          id: i.id as string,
+          product_name: i.product_name as string,
+          product_sku: i.product_sku as string,
+          product_image: i.product_image as string,
+          quantity: Number(i.quantity),
+          price: Number(i.price),
+          total: Number(i.total),
+        })),
+      });
+    } catch {
+      // modal still shows basic list data
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
   const handleEditClick = (order: Order) => {
@@ -356,57 +421,72 @@ export default function BrandOrders() {
 
         {/* View Modal */}
         <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Order Details</DialogTitle>
             </DialogHeader>
             {selectedOrder && (
               <div className="space-y-4">
+                {/* Header */}
                 <div className="flex items-center justify-between pb-4 border-b">
                   <div>
-                    <div className="font-bold text-xl">{selectedOrder.orderNumber}</div>
-                    <div className="text-sm text-gray-600">{selectedOrder.date}</div>
+                    <div className="font-bold text-xl">
+                      {selectedOrderDetail?.orderNumber || selectedOrder.orderNumber}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {selectedOrderDetail?.date || selectedOrder.date}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {getStatusIcon(selectedOrder.status)}
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedOrder.status)}`}>
-                      {selectedOrder.status}
+                    {getStatusIcon(selectedOrderDetail?.status || selectedOrder.status)}
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedOrderDetail?.status || selectedOrder.status)}`}>
+                      {(selectedOrderDetail?.status || selectedOrder.status).replace('_', ' ')}
                     </span>
                   </div>
                 </div>
 
+                {detailLoading && (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                  </div>
+                )}
+
+                {/* Customer + Shipping */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <div className="text-sm text-gray-600 mb-2">Customer Information</div>
+                    <div className="text-sm text-gray-600 mb-2">Customer</div>
                     <div className="bg-gray-50 p-3 rounded-lg">
-                      <div className="font-medium">{selectedOrder.customer}</div>
-                      <div className="text-sm text-gray-600">{selectedOrder.customerEmail}</div>
+                      <div className="font-medium">
+                        {selectedOrderDetail?.buyer?.full_name || selectedOrder.customer}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {selectedOrderDetail?.buyer?.email || selectedOrder.customerEmail}
+                      </div>
+                      {selectedOrderDetail?.buyer?.phone_number && (
+                        <div className="text-sm text-gray-500">{selectedOrderDetail.buyer.phone_number}</div>
+                      )}
                     </div>
                   </div>
                   <div>
-                    <div className="text-sm text-gray-600 mb-2">Seller Information</div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <div className="font-medium">{selectedOrder.seller}</div>
-                      <div className="text-sm">
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          selectedOrder.sellerType === 'Brand' ? 'bg-red-100 text-red-700' :
-                          selectedOrder.sellerType === 'Manufacturer' ? 'bg-blue-100 text-blue-700' :
-                          'bg-purple-100 text-purple-700'
-                        }`}>
-                          {selectedOrder.sellerType}
-                        </span>
-                      </div>
+                    <div className="text-sm text-gray-600 mb-2">Shipping Address</div>
+                    <div className="bg-gray-50 p-3 rounded-lg text-sm">
+                      {selectedOrderDetail?.shippingAddress ? (
+                        <>
+                          <div className="font-medium">{selectedOrderDetail.shippingAddress.full_name}</div>
+                          <div className="text-gray-600">{selectedOrderDetail.shippingAddress.phone_number}</div>
+                          <div className="text-gray-600">{selectedOrderDetail.shippingAddress.street_address}</div>
+                          <div className="text-gray-600">
+                            {selectedOrderDetail.shippingAddress.city}, {selectedOrderDetail.shippingAddress.state} {selectedOrderDetail.shippingAddress.zipcode}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-gray-600">{selectedOrder.shippingAddress}</div>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                <div>
-                  <div className="text-sm text-gray-600 mb-2">Shipping Address</div>
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <div className="text-sm">{selectedOrder.shippingAddress}</div>
-                  </div>
-                </div>
-
+                {/* Order Items */}
                 <div>
                   <div className="text-sm text-gray-600 mb-2">Order Items</div>
                   <div className="border rounded-lg overflow-hidden">
@@ -420,12 +500,29 @@ export default function BrandOrders() {
                         </tr>
                       </thead>
                       <tbody className="divide-y">
-                        {selectedOrder.products.map((product, index) => (
+                        {selectedOrderDetail ? selectedOrderDetail.items.map((item) => (
+                          <tr key={item.id}>
+                            <td className="px-4 py-2">
+                              <div className="flex items-center gap-2">
+                                {item.product_image && (
+                                  <img src={item.product_image} alt={item.product_name} className="w-8 h-8 rounded object-cover" />
+                                )}
+                                <div>
+                                  <div className="text-sm font-medium">{item.product_name}</div>
+                                  {item.product_sku && <div className="text-xs text-gray-400 font-mono">{item.product_sku}</div>}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-2 text-sm">{item.quantity}</td>
+                            <td className="px-4 py-2 text-sm">₦{Number(item.price).toLocaleString()}</td>
+                            <td className="px-4 py-2 text-sm font-medium">₦{Number(item.total).toLocaleString()}</td>
+                          </tr>
+                        )) : selectedOrder.products.map((product, index) => (
                           <tr key={index}>
                             <td className="px-4 py-2 text-sm">{product.name}</td>
                             <td className="px-4 py-2 text-sm">{product.qty}</td>
-                            <td className="px-4 py-2 text-sm">${product.price}</td>
-                            <td className="px-4 py-2 text-sm font-medium">${(product.qty * product.price).toFixed(2)}</td>
+                            <td className="px-4 py-2 text-sm">₦{product.price.toLocaleString()}</td>
+                            <td className="px-4 py-2 text-sm font-medium">₦{(product.qty * product.price).toLocaleString()}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -433,29 +530,45 @@ export default function BrandOrders() {
                   </div>
                 </div>
 
+                {/* Financial Summary */}
                 <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Subtotal:</span>
-                    <span className="font-medium">${selectedOrder.totalAmount.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Platform Commission ({((selectedOrder.commission / selectedOrder.totalAmount) * 100).toFixed(0)}%):</span>
-                    <span className="font-medium text-green-600">${selectedOrder.commission.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between pt-2 border-t">
-                    <span className="font-bold">Total Amount:</span>
-                    <span className="font-bold text-xl" style={{ color: '#BE220E' }}>
-                      ${selectedOrder.totalAmount.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm">Payment Status:</span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      selectedOrder.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' :
-                      selectedOrder.paymentStatus === 'refunded' ? 'bg-orange-100 text-orange-700' :
+                  {selectedOrderDetail ? (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Subtotal:</span>
+                        <span>₦{selectedOrderDetail.subtotal.toLocaleString()}</span>
+                      </div>
+                      {selectedOrderDetail.discount > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">
+                            Discount{selectedOrderDetail.promoCode ? ` (${selectedOrderDetail.promoCode})` : ''}:
+                          </span>
+                          <span className="text-green-600">-₦{selectedOrderDetail.discount.toLocaleString()}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Shipping:</span>
+                        <span>₦{selectedOrderDetail.shippingFee.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between pt-2 border-t font-bold">
+                        <span>Total:</span>
+                        <span style={{ color: '#BE220E' }}>₦{selectedOrderDetail.total.toLocaleString()}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between font-bold">
+                      <span>Total:</span>
+                      <span style={{ color: '#BE220E' }}>₦{selectedOrder.totalAmount.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between pt-1">
+                    <span className="text-sm text-gray-600">Payment:</span>
+                    <span className={`px-3 py-0.5 rounded-full text-xs font-medium ${
+                      (selectedOrderDetail?.paymentStatus || selectedOrder.paymentStatus) === 'paid' ? 'bg-green-100 text-green-700' :
+                      (selectedOrderDetail?.paymentStatus || selectedOrder.paymentStatus) === 'refunded' ? 'bg-orange-100 text-orange-700' :
                       'bg-yellow-100 text-yellow-700'
                     }`}>
-                      {selectedOrder.paymentStatus}
+                      {selectedOrderDetail?.paymentStatus || selectedOrder.paymentStatus}
                     </span>
                   </div>
                 </div>
@@ -465,10 +578,7 @@ export default function BrandOrders() {
               <Button variant="outline" onClick={() => setShowViewModal(false)}>Close</Button>
               {selectedOrder && selectedOrder.paymentStatus === 'paid' && selectedOrder.status !== 'refunded' && (
                 <Button
-                  onClick={() => {
-                    setShowViewModal(false);
-                    handleRefundClick(selectedOrder);
-                  }}
+                  onClick={() => { setShowViewModal(false); handleRefundClick(selectedOrder); }}
                   variant="outline"
                   className="text-orange-600"
                 >

@@ -22,6 +22,28 @@ interface Buyer {
   verified: boolean;
 }
 
+interface RecentOrder {
+  id: string;
+  order_number: string;
+  total: number;
+  status: string;
+  created_at: string;
+}
+
+interface BuyerAddress {
+  id: string;
+  full_name: string;
+  street_address: string;
+  city: string;
+  state: string;
+  zipcode: string;
+}
+
+interface BuyerDetail extends Buyer {
+  recentOrders: RecentOrder[];
+  addresses: BuyerAddress[];
+}
+
 export default function BrandBuyers() {
   const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,6 +78,8 @@ export default function BrandBuyers() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedBuyer, setSelectedBuyer] = useState<Buyer | null>(null);
+  const [selectedBuyerDetail, setSelectedBuyerDetail] = useState<BuyerDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const filteredBuyers = buyers.filter((buyer) => {
     const matchesSearch = buyer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -90,9 +114,24 @@ export default function BrandBuyers() {
     toast.error('Delete is not supported — suspend the account instead');
   };
 
-  const handleView = (buyer: Buyer) => {
+  const handleView = async (buyer: Buyer) => {
     setSelectedBuyer(buyer);
+    setSelectedBuyerDetail(null);
     setShowViewModal(true);
+    setDetailLoading(true);
+    try {
+      const res = await api.get<unknown>(`/admin/buyers/${buyer.id}`);
+      const d = res.data as Record<string, unknown>;
+      setSelectedBuyerDetail({
+        ...buyer,
+        recentOrders: (d.recentOrders as RecentOrder[]) || [],
+        addresses: (d.addresses as BuyerAddress[]) || [],
+      });
+    } catch {
+      // modal still shows basic info from the list
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
   const handleExport = () => {
@@ -257,12 +296,13 @@ export default function BrandBuyers() {
 
         {/* View Modal */}
         <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
-          <DialogContent>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Buyer Details</DialogTitle>
             </DialogHeader>
             {selectedBuyer && (
-              <div className="space-y-4">
+              <div className="space-y-5">
+                {/* Header */}
                 <div className="flex items-center gap-4 pb-4 border-b">
                   <div className="w-16 h-16 rounded-full bg-[#BE220E] text-white flex items-center justify-center font-bold text-2xl">
                     {selectedBuyer.name.charAt(0)}
@@ -270,81 +310,98 @@ export default function BrandBuyers() {
                   <div className="flex-1">
                     <div className="font-bold text-lg flex items-center gap-2">
                       {selectedBuyer.name}
-                      {selectedBuyer.verified && (
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                      )}
+                      {selectedBuyer.verified && <CheckCircle className="w-5 h-5 text-green-600" />}
                     </div>
                     <div className="text-gray-600">{selectedBuyer.email}</div>
+                    <div className="text-sm text-gray-500">{selectedBuyer.phone}</div>
                   </div>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    selectedBuyer.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                  }`}>
+                    {selectedBuyer.status}
+                  </span>
                 </div>
 
+                {/* Stats */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <div className="text-sm text-gray-600">Phone Number</div>
-                    <div className="font-medium mt-1">{selectedBuyer.phone}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-600">Account Status</div>
-                    <div className="font-medium mt-1 capitalize">{selectedBuyer.status}</div>
-                  </div>
-                  <div>
                     <div className="text-sm text-gray-600">Total Orders</div>
-                    <div className="font-bold mt-1 text-2xl text-blue-600">
-                      {selectedBuyer.totalOrders}
-                    </div>
+                    <div className="font-bold text-2xl text-blue-600 mt-1">{selectedBuyer.totalOrders}</div>
                   </div>
                   <div>
                     <div className="text-sm text-gray-600">Total Spent</div>
-                    <div className="font-bold mt-1 text-2xl text-green-600">
-                      {selectedBuyer.totalSpent}
-                    </div>
+                    <div className="font-bold text-2xl text-green-600 mt-1">{selectedBuyer.totalSpent}</div>
                   </div>
                   <div>
                     <div className="text-sm text-gray-600">Last Order</div>
                     <div className="font-medium mt-1">{selectedBuyer.lastOrder}</div>
                   </div>
                   <div>
-                    <div className="text-sm text-gray-600">Joined Date</div>
+                    <div className="text-sm text-gray-600">Joined</div>
                     <div className="font-medium mt-1">{selectedBuyer.joinedDate}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-600">Verified</div>
-                    <div className="font-medium mt-1">
-                      {selectedBuyer.verified ? (
-                        <span className="text-green-600 flex items-center gap-1">
-                          <CheckCircle className="w-4 h-4" />
-                          Yes
-                        </span>
-                      ) : (
-                        <span className="text-gray-500">No</span>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-600">Avg. Order Value</div>
-                    <div className="font-medium mt-1">
-                      ${(parseFloat(selectedBuyer.totalSpent.replace(/[$,]/g, '')) / selectedBuyer.totalOrders).toFixed(2)}
-                    </div>
                   </div>
                 </div>
 
-                <div className="pt-4 border-t">
-                  <div className="text-sm text-gray-600 mb-2">Quick Actions</div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline">View Orders</Button>
-                    <Button size="sm" variant="outline">Send Email</Button>
+                {detailLoading && (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
                   </div>
-                </div>
+                )}
+
+                {/* Recent Orders */}
+                {selectedBuyerDetail && selectedBuyerDetail.recentOrders.length > 0 && (
+                  <div>
+                    <div className="text-sm font-semibold text-gray-700 mb-2">Recent Orders</div>
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Order #</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Status</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Total</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {selectedBuyerDetail.recentOrders.slice(0, 5).map((o) => (
+                            <tr key={o.id}>
+                              <td className="px-3 py-2 text-sm font-mono">{o.order_number}</td>
+                              <td className="px-3 py-2 text-sm capitalize">{o.status.replace('_', ' ')}</td>
+                              <td className="px-3 py-2 text-sm font-medium">₦{Number(o.total).toLocaleString()}</td>
+                              <td className="px-3 py-2 text-sm text-gray-500">
+                                {new Date(o.created_at).toLocaleDateString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Saved Addresses */}
+                {selectedBuyerDetail && selectedBuyerDetail.addresses.length > 0 && (
+                  <div>
+                    <div className="text-sm font-semibold text-gray-700 mb-2">Saved Addresses</div>
+                    <div className="space-y-2">
+                      {selectedBuyerDetail.addresses.map((addr) => (
+                        <div key={addr.id} className="bg-gray-50 rounded-lg px-4 py-3 text-sm">
+                          <div className="font-medium">{addr.full_name}</div>
+                          <div className="text-gray-600">
+                            {addr.street_address}, {addr.city}, {addr.state} {addr.zipcode}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowViewModal(false)}>Close</Button>
               {selectedBuyer && selectedBuyer.status === 'suspended' && (
                 <Button
-                  onClick={() => {
-                    handleActivate(selectedBuyer.id);
-                    setShowViewModal(false);
-                  }}
+                  onClick={() => { handleActivate(selectedBuyer.id); setShowViewModal(false); }}
                   className="text-white"
                   style={{ backgroundColor: '#BE220E' }}
                 >
