@@ -21,7 +21,7 @@ interface Order {
   totalAmount: number;
   commission: number;
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
-  paymentStatus: 'pending' | 'paid' | 'refunded';
+  paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
   date: string;
   shippingAddress: string;
 }
@@ -46,30 +46,57 @@ export default function BrandOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Map backend statuses → frontend display statuses
+  const statusFromBackend = (s: string): Order['status'] => {
+    const map: Record<string, Order['status']> = {
+      pending_payment: 'pending',
+      confirmed:       'processing',
+      shipped:         'shipped',
+      delivered:       'delivered',
+      cancelled:       'cancelled',
+    };
+    return map[s] || 'pending';
+  };
+
+  // Map frontend display statuses → backend status values (for PATCH calls)
+  const statusToBackend = (s: string): string => {
+    const map: Record<string, string> = {
+      pending:    'pending_payment',
+      processing: 'confirmed',
+      shipped:    'shipped',
+      delivered:  'delivered',
+      cancelled:  'cancelled',
+    };
+    return map[s] || s;
+  };
+
   const loadOrders = async () => {
     setLoading(true);
     try {
       const res = await api.get<unknown>('/admin/orders');
       const raw = ((res.data as Record<string, unknown>).orders || res.data) as Record<string, unknown>[];
-      setOrders((Array.isArray(raw) ? raw : []).map((o) => ({
-        id: o.id as string,
-        orderNumber: (o.order_number as string) || String(o.id).slice(0, 8).toUpperCase(),
-        customer: (o.user_name as string) || (o.customer_name as string) || 'Customer',
-        customerEmail: (o.user_email as string) || '',
-        seller: 'Anointed',
-        sellerType: 'Brand' as const,
-        products: (o.items as { product_name: string; quantity: number; price: number }[] || []).map((i) => ({
-          name: i.product_name,
-          qty: i.quantity,
-          price: Number(i.price),
-        })),
-        totalAmount: Number(o.total) || 0,
-        commission: Number(o.total) * 0.1 || 0,
-        status: (o.status as Order['status']) || 'pending',
-        paymentStatus: (o.payment_status as Order['paymentStatus']) || 'pending',
-        date: o.created_at ? new Date(o.created_at as string).toLocaleDateString() : '—',
-        shippingAddress: (o.shipping_address as string) || '—',
-      })));
+      setOrders((Array.isArray(raw) ? raw : []).map((o) => {
+        const buyer = o.buyer as Record<string, string> | null;
+        return {
+          id: o.id as string,
+          orderNumber: (o.order_number as string) || String(o.id).slice(0, 8).toUpperCase(),
+          customer: buyer?.full_name || 'Customer',
+          customerEmail: buyer?.email || '',
+          seller: 'VeevillHub',
+          sellerType: 'Brand' as const,
+          products: (o.items as { product_name: string; quantity: number; price: number }[] || []).map((i) => ({
+            name: i.product_name,
+            qty: i.quantity,
+            price: Number(i.price),
+          })),
+          totalAmount: Number(o.total) || 0,
+          commission: Number(o.total) * 0.1 || 0,
+          status: statusFromBackend(o.status as string),
+          paymentStatus: (o.payment_status as Order['paymentStatus']) || 'pending',
+          date: o.created_at ? new Date(o.created_at as string).toLocaleDateString() : '—',
+          shippingAddress: (o.shipping_address as string) || '—',
+        };
+      }));
     } catch {
       toast.error('Failed to load orders');
     } finally {
@@ -164,7 +191,7 @@ export default function BrandOrders() {
   const handleUpdateStatus = async () => {
     if (!selectedOrder) return;
     try {
-      await api.patch(`/admin/orders/${selectedOrder.id}/status`, { status: newStatus });
+      await api.patch(`/admin/orders/${selectedOrder.id}/status`, { status: statusToBackend(newStatus) });
       setOrders(orders.map((o) => o.id === selectedOrder.id ? { ...o, status: newStatus as Order['status'] } : o));
       setShowEditModal(false);
       toast.success('Order status updated successfully');
@@ -265,13 +292,13 @@ export default function BrandOrders() {
           <Card className="p-4">
             <div className="text-sm text-gray-600">Total Revenue</div>
             <div className="text-2xl font-bold mt-1" style={{ color: '#BE220E' }}>
-              ${totalRevenue.toFixed(2)}
+              ₦{totalRevenue.toLocaleString()}
             </div>
           </Card>
           <Card className="p-4">
             <div className="text-sm text-gray-600">Commission</div>
             <div className="text-2xl font-bold mt-1 text-green-600">
-              ${totalCommission.toFixed(2)}
+              ₦{totalCommission.toLocaleString()}
             </div>
           </Card>
         </div>
@@ -310,6 +337,7 @@ export default function BrandOrders() {
                 <SelectItem value="all">All Payment</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="paid">Paid</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
                 <SelectItem value="refunded">Refunded</SelectItem>
               </SelectContent>
             </Select>
@@ -369,7 +397,7 @@ export default function BrandOrders() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="font-bold" style={{ color: '#BE220E' }}>
-                        ${order.totalAmount.toFixed(2)}
+                        ₦{order.totalAmount.toLocaleString()}
                       </div>
                       <div className="text-xs text-gray-500">
                         {order.products.length} item{order.products.length > 1 ? 's' : ''}
@@ -377,7 +405,7 @@ export default function BrandOrders() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="font-bold text-green-600">
-                        ${order.commission.toFixed(2)}
+                        ₦{order.commission.toLocaleString()}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -390,8 +418,9 @@ export default function BrandOrders() {
                     </td>
                     <td className="px-6 py-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        order.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' :
+                        order.paymentStatus === 'paid'     ? 'bg-green-100 text-green-700' :
                         order.paymentStatus === 'refunded' ? 'bg-orange-100 text-orange-700' :
+                        order.paymentStatus === 'failed'   ? 'bg-red-100 text-red-700' :
                         'bg-yellow-100 text-yellow-700'
                       }`}>
                         {order.paymentStatus}
@@ -564,8 +593,9 @@ export default function BrandOrders() {
                   <div className="flex justify-between pt-1">
                     <span className="text-sm text-gray-600">Payment:</span>
                     <span className={`px-3 py-0.5 rounded-full text-xs font-medium ${
-                      (selectedOrderDetail?.paymentStatus || selectedOrder.paymentStatus) === 'paid' ? 'bg-green-100 text-green-700' :
+                      (selectedOrderDetail?.paymentStatus || selectedOrder.paymentStatus) === 'paid'     ? 'bg-green-100 text-green-700' :
                       (selectedOrderDetail?.paymentStatus || selectedOrder.paymentStatus) === 'refunded' ? 'bg-orange-100 text-orange-700' :
+                      (selectedOrderDetail?.paymentStatus || selectedOrder.paymentStatus) === 'failed'   ? 'bg-red-100 text-red-700' :
                       'bg-yellow-100 text-yellow-700'
                     }`}>
                       {selectedOrderDetail?.paymentStatus || selectedOrder.paymentStatus}
@@ -657,12 +687,12 @@ export default function BrandOrders() {
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Refund Amount:</span>
                     <span className="font-bold text-xl" style={{ color: '#BE220E' }}>
-                      ${selectedOrder.totalAmount.toFixed(2)}
+                      ₦{selectedOrder.totalAmount.toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Commission Lost:</span>
-                    <span className="font-medium text-red-600">-${selectedOrder.commission.toFixed(2)}</span>
+                    <span className="font-medium text-red-600">-₦{selectedOrder.commission.toLocaleString()}</span>
                   </div>
                 </div>
               </div>

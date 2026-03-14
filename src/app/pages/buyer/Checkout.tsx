@@ -48,6 +48,9 @@ export default function Checkout() {
   const [states, setStates] = useState<string[]>([]);
   const [shippingFee, setShippingFee] = useState(0);
   const [promoCode, setPromoCode] = useState('');
+  const [promoDiscount, setPromoDiscount] = useState(0);
+  const [promoApplied, setPromoApplied] = useState(false);
+  const [applyingPromo, setApplyingPromo] = useState(false);
 
   // New address form
   const [showNewAddressForm, setShowNewAddressForm] = useState(false);
@@ -112,7 +115,26 @@ export default function Checkout() {
     }).catch(() => setShippingFee(0));
   };
 
-  const total = cartTotal + shippingFee;
+  const total = cartTotal + shippingFee - promoDiscount;
+
+  const handleApplyPromo = async () => {
+    if (!promoCode.trim()) return;
+    setApplyingPromo(true);
+    try {
+      const res = await api.post<unknown>('/checkout/apply-promo', { promoCode: promoCode.trim() });
+      const data = res.data as Record<string, unknown>;
+      setPromoDiscount(Number(data.discount) || 0);
+      setPromoApplied(true);
+      toast.success(`Promo applied! You save ₦${Number(data.discount).toLocaleString()}`);
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message || 'Invalid promo code';
+      toast.error(msg);
+      setPromoDiscount(0);
+      setPromoApplied(false);
+    } finally {
+      setApplyingPromo(false);
+    }
+  };
 
   if (cartItems.length === 0 && step !== 'confirmation') {
     return (
@@ -624,7 +646,7 @@ export default function Checkout() {
                   {paymentMethod === 'wallet' && (
                     <div className="text-center py-6">
                       <Wallet className="w-16 h-16 text-[#BE220E] mx-auto mb-4" />
-                      <p className="text-gray-600 mb-2">Pay with your Anointed Wallet</p>
+                      <p className="text-gray-600 mb-2">Pay with your VeevillHub Wallet</p>
                       <p className="text-sm text-gray-500">You will be redirected to complete the payment</p>
                     </div>
                   )}
@@ -648,12 +670,32 @@ export default function Checkout() {
                   {/* Promo code */}
                   <div>
                     <Label htmlFor="promoCode">Promo Code (optional)</Label>
-                    <Input
-                      id="promoCode"
-                      value={promoCode}
-                      onChange={(e) => setPromoCode(e.target.value)}
-                      placeholder="Enter promo code"
-                    />
+                    <div className="flex gap-2 mt-1">
+                      <Input
+                        id="promoCode"
+                        value={promoCode}
+                        onChange={(e) => {
+                          setPromoCode(e.target.value);
+                          if (promoApplied) { setPromoApplied(false); setPromoDiscount(0); }
+                        }}
+                        placeholder="Enter promo code"
+                        disabled={promoApplied}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleApplyPromo}
+                        disabled={!promoCode.trim() || promoApplied || applyingPromo}
+                        className="shrink-0"
+                      >
+                        {applyingPromo ? <Loader2 className="w-4 h-4 animate-spin" /> : promoApplied ? 'Applied ✓' : 'Apply'}
+                      </Button>
+                    </div>
+                    {promoApplied && promoDiscount > 0 && (
+                      <p className="text-sm text-green-600 mt-1">
+                        Discount: −₦{promoDiscount.toLocaleString()}
+                      </p>
+                    )}
                   </div>
 
                   <Button
@@ -707,6 +749,12 @@ export default function Checkout() {
                     <span>Shipping</span>
                     <span>{shippingFee === 0 ? 'Free' : `₦${shippingFee.toLocaleString()}`}</span>
                   </div>
+                  {promoDiscount > 0 && (
+                    <div className="flex justify-between text-green-600">
+                      <span>Promo Discount</span>
+                      <span>−₦{promoDiscount.toLocaleString()}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between font-bold pt-2 border-t border-gray-200">
                     <span>Total</span>
                     <span className="text-[#BE220E]">₦{total.toLocaleString()}</span>

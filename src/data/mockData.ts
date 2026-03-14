@@ -8,10 +8,10 @@ export const initializeMockData = () => {
       id: '1',
       email: 'admin@anointed.com', // CORRECT EMAIL
       password: 'admin123',
-      name: 'Anointed Admin',
+      name: 'VeevillHub Admin',
       role: 'brand',
       verificationStatus: 'approved',
-      avatar: 'https://ui-avatars.com/api/?name=Anointed+Admin&background=BE220E&color=fff',
+      avatar: 'https://ui-avatars.com/api/?name=VeevillHub+Admin&background=BE220E&color=fff',
     },
     {
       id: '2',
@@ -105,7 +105,7 @@ export const initializeMockData = () => {
         images: ['https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=500'],
         category: 'Food & Beverage',
         manufacturerId: '1',
-        manufacturerName: 'Anointed Admin',
+        manufacturerName: 'VeevillHub Admin',
       },
     ];
     localStorage.setItem('products', JSON.stringify(products));

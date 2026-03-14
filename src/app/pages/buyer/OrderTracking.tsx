@@ -224,7 +224,7 @@ export default function OrderTracking() {
             <div className="w-8 h-8 bg-[#BE220E] rounded-lg flex items-center justify-center">
               <Home className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-lg hidden md:inline">Anointed</span>
+            <span className="font-bold text-lg hidden md:inline">VeevillHub</span>
           </Link>
           <div className="flex-1"></div>
           <Button variant="ghost" size="icon" onClick={handleShare}>
@@ -372,7 +372,6 @@ export default function OrderTracking() {
                     >
                       {item.name}
                     </Link>
-                    <p className="text-sm text-gray-600 mb-1">{item.retailerName}</p>
                     <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
                     <p className="text-sm font-bold text-[#BE220E]">
                       ₦{(item.price * item.quantity).toLocaleString()}

@@ -12,7 +12,7 @@ export default function LandingPage() {
             <div className="w-10 h-10 bg-[#BE220E] rounded-lg flex items-center justify-center">
               <Store className="w-6 h-6 text-white" />
             </div>
-            <span className="text-2xl font-bold">Anointed</span>
+            <span className="text-2xl font-bold">VeevillHub</span>
           </div>
           <div className="flex items-center gap-4">
             <Link to="/login">
@@ -64,7 +64,7 @@ export default function LandingPage() {
       {/* Features Section */}
       <section className="py-20">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-12">Why Choose Anointed?</h2>
+          <h2 className="text-3xl font-bold text-center mb-12">Why Choose VeevillHub?</h2>
           <div className="grid md:grid-cols-3 gap-8">
             <div className="p-6 border border-gray-200 rounded-lg hover:shadow-lg transition cursor-pointer">
               <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-4" style={{ backgroundColor: '#BE220E' }}>
@@ -137,7 +137,7 @@ export default function LandingPage() {
       <section className="py-20" style={{ backgroundColor: '#BE220E' }}>
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-4xl font-bold text-white mb-6">Ready to Get Started?</h2>
-          <p className="text-xl text-white/90 mb-8">Join thousands of vendors and buyers on Anointed today</p>
+          <p className="text-xl text-white/90 mb-8">Join thousands of vendors and buyers on VeevillHub today</p>
           <Link to="/signup">
             <Button size="lg" className="bg-white hover:bg-gray-100" style={{ color: '#BE220E' }}>
               Create Your Account
@@ -155,7 +155,7 @@ export default function LandingPage() {
                 <div className="w-8 h-8 bg-[#BE220E] rounded-lg flex items-center justify-center">
                   <Store className="w-5 h-5 text-white" />
                 </div>
-                <span className="text-xl font-bold">Anointed</span>
+                <span className="text-xl font-bold">VeevillHub</span>
               </div>
               <p className="text-gray-400">Africa's premier multi-vendor e-commerce platform</p>
             </div>
@@ -185,7 +185,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>© 2026 Anointed. All rights reserved.</p>
+            <p>© 2026 VeevillHub. All rights reserved.</p>
           </div>
         </div>
       </footer>

@@ -45,7 +45,7 @@ export default function LoginPage() {
           </div>
 
           <h1 className="text-3xl font-bold text-center mb-2">Welcome Back</h1>
-          <p className="text-gray-600 text-center mb-8">Sign in to your Anointed account</p>
+          <p className="text-gray-600 text-center mb-8">Sign in to your VeevillHub account</p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>

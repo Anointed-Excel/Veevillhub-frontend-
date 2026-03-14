@@ -142,7 +142,7 @@ export default function DashboardLayout({ children, role }: DashboardLayoutProps
               <Store className="w-6 h-6 text-white" />
             </div>
             <div>
-              <div className="font-bold text-lg">Anointed</div>
+              <div className="font-bold text-lg">VeevillHub</div>
               <div className="text-xs text-gray-500 capitalize">{role}</div>
             </div>
           </div>
@@ -186,7 +186,7 @@ export default function DashboardLayout({ children, role }: DashboardLayoutProps
               <div className="w-8 h-8 bg-[#BE220E] rounded-lg flex items-center justify-center">
                 <Store className="w-5 h-5 text-white" />
               </div>
-              <span className="font-bold">Anointed</span>
+              <span className="font-bold">VeevillHub</span>
             </div>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -207,7 +207,7 @@ export default function DashboardLayout({ children, role }: DashboardLayoutProps
                     <Store className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <div className="font-bold text-lg">Anointed</div>
+                    <div className="font-bold text-lg">VeevillHub</div>
                     <div className="text-xs text-gray-500 capitalize">{role}</div>
                   </div>
                 </div>

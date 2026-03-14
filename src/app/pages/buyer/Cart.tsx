@@ -46,8 +46,6 @@ export default function Cart() {
     }
   };
 
-  const shippingFee = cartTotal > 50000 ? 0 : 1500;
-  const total = cartTotal + shippingFee;
 
   if (cartItems.length === 0) {
     return (
@@ -155,8 +153,6 @@ export default function Cart() {
                       {item.name}
                     </Link>
 
-                    <p className="text-sm text-gray-600 mb-2">{item.retailerName}</p>
-
                     {item.variant && (
                       <p className="text-sm text-gray-600 mb-2">
                         Variant: {item.variant}
@@ -235,24 +231,12 @@ export default function Cart() {
 
                 <div className="flex justify-between text-gray-600">
                   <span>Shipping Fee</span>
-                  <span>
-                    {shippingFee === 0 ? (
-                      <span className="text-green-600 font-medium">Free</span>
-                    ) : (
-                      `₦${shippingFee.toLocaleString()}`
-                    )}
-                  </span>
+                  <span className="text-gray-400 italic text-sm">Calculated at checkout</span>
                 </div>
 
-                {shippingFee > 0 && (
-                  <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
-                    Add ₦{(50000 - cartTotal).toLocaleString()} more for free shipping
-                  </div>
-                )}
-
                 <div className="border-t border-gray-200 pt-3 flex justify-between font-bold text-lg">
-                  <span>Total</span>
-                  <span className="text-[#BE220E]">₦{total.toLocaleString()}</span>
+                  <span>Subtotal</span>
+                  <span className="text-[#BE220E]">₦{cartTotal.toLocaleString()}</span>
                 </div>
               </div>
 
@@ -297,7 +281,7 @@ export default function Cart() {
           <div>
             <p className="text-sm text-gray-600">Total</p>
             <p className="text-xl font-bold text-[#BE220E]">
-              ₦{total.toLocaleString()}
+              ₦{cartTotal.toLocaleString()}
             </p>
           </div>
           <Button

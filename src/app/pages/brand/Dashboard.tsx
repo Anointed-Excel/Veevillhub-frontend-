@@ -11,6 +11,10 @@ export default function BrandDashboard() {
   const [buyersCount, setBuyersCount] = useState<number | null>(null);
   const [ordersCount, setOrdersCount] = useState<number | null>(null);
   const [productsCount, setProductsCount] = useState<number | null>(null);
+  const [manufacturersCount, setManufacturersCount] = useState<number | null>(null);
+  const [retailersCount, setRetailersCount] = useState<number | null>(null);
+  const [totalRevenue, setTotalRevenue] = useState<number | null>(null);
+  const [revenueGrowth, setRevenueGrowth] = useState<number | null>(null);
 
   useEffect(() => {
     // Total users
@@ -18,43 +22,49 @@ export default function BrandDashboard() {
       .then((res) => setTotalUsers((res.data as Record<string, unknown>).totalUsers as number))
       .catch(() => {});
 
-    // Buyers count via pagination total
+    // Buyers count — pagination is at res.pagination (top level), not inside res.data
     api.get<unknown>('/admin/buyers?limit=1')
-      .then((res) => {
-        const d = res.data as Record<string, unknown>;
-        const pagination = d.pagination as Record<string, unknown> | undefined;
-        setBuyersCount(pagination?.total as number ?? (d.buyers as unknown[])?.length ?? null);
-      }).catch(() => {});
+      .then((res) => setBuyersCount(res.pagination?.totalResults ?? null))
+      .catch(() => {});
 
     // Orders count
     api.get<unknown>('/admin/orders?limit=1')
-      .then((res) => {
-        const d = res.data as Record<string, unknown>;
-        const pagination = d.pagination as Record<string, unknown> | undefined;
-        setOrdersCount(pagination?.total as number ?? (d.orders as unknown[])?.length ?? null);
-      }).catch(() => {});
+      .then((res) => setOrdersCount(res.pagination?.totalResults ?? null))
+      .catch(() => {});
 
     // Products count
     api.get<unknown>('/products?limit=1')
+      .then((res) => setProductsCount(res.pagination?.totalResults ?? null))
+      .catch(() => {});
+
+    // Analytics for manufacturers, retailers, revenue, growth
+    api.get<unknown>('/admin/analytics')
       .then((res) => {
         const d = res.data as Record<string, unknown>;
-        const pagination = d.pagination as Record<string, unknown> | undefined;
-        setProductsCount(pagination?.total as number ?? (d.products as unknown[])?.length ?? null);
+        const users = d.users as Record<string, unknown>;
+        const revenue = d.revenue as Record<string, unknown>;
+        setManufacturersCount(users?.totalManufacturers as number ?? null);
+        setRetailersCount(users?.totalRetailers as number ?? null);
+        setTotalRevenue(revenue?.total as number ?? null);
+        setRevenueGrowth(revenue?.growth as number ?? null);
       }).catch(() => {});
   }, []);
 
   const fmt = (val: number | null, fallback = '—') =>
     val !== null ? val.toLocaleString() : fallback;
 
+  const fmtRevenue = (val: number | null) =>
+    val !== null ? `₦${val.toLocaleString()}` : '—';
+
   const stats = [
-    { label: 'Total Users', value: fmt(totalUsers), icon: Users, color: '#BE220E', change: '', link: '/brand/users' },
-    { label: 'Manufacturers', value: '—', icon: Building2, color: '#059669', change: '', link: '/brand/manufacturers' },
-    { label: 'Retailers', value: '—', icon: Store, color: '#2563EB', change: '', link: '/brand/retailers' },
-    { label: 'Buyers', value: fmt(buyersCount), icon: ShoppingBag, color: '#7C3AED', change: '', link: '/brand/buyers' },
-    { label: 'Total Products', value: fmt(productsCount), icon: Package, color: '#EA580C', change: '', link: '/brand/products' },
-    { label: 'Total Orders', value: fmt(ordersCount), icon: ShoppingCart, color: '#0891B2', change: '', link: '/brand/orders' },
-    { label: 'Revenue', value: '—', icon: DollarSign, color: '#16A34A', change: '', link: '/brand/wallet' },
-    { label: 'Growth Rate', value: '—', icon: TrendingUp, color: '#BE220E', change: '', link: '/brand/analytics' },
+    { label: 'Total Users',    value: fmt(totalUsers),          icon: Users,        color: '#BE220E', change: '', link: '/brand/users' },
+    { label: 'Manufacturers',  value: fmt(manufacturersCount),  icon: Building2,    color: '#059669', change: '', link: '/brand/manufacturers' },
+    { label: 'Retailers',      value: fmt(retailersCount),      icon: Store,        color: '#2563EB', change: '', link: '/brand/retailers' },
+    { label: 'Buyers',         value: fmt(buyersCount),         icon: ShoppingBag,  color: '#7C3AED', change: '', link: '/brand/buyers' },
+    { label: 'Total Products', value: fmt(productsCount),       icon: Package,      color: '#EA580C', change: '', link: '/brand/products' },
+    { label: 'Total Orders',   value: fmt(ordersCount),         icon: ShoppingCart, color: '#0891B2', change: '', link: '/brand/orders' },
+    { label: 'Revenue',        value: fmtRevenue(totalRevenue), icon: DollarSign,   color: '#16A34A', change: '', link: '/brand/wallet' },
+    { label: 'Growth Rate',    value: revenueGrowth !== null ? `${revenueGrowth > 0 ? '+' : ''}${revenueGrowth}%` : '—', icon: TrendingUp, color: '#BE220E', change: '', link: '/brand/analytics' },
   ];
 
   const recentActivities = [

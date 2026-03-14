@@ -18,7 +18,7 @@ export default function SignupPage() {
             </div>
           </div>
 
-          <h1 className="text-3xl font-bold text-center mb-2">Join Anointed</h1>
+          <h1 className="text-3xl font-bold text-center mb-2">Join VeevillHub</h1>
           <p className="text-gray-600 text-center mb-12">Choose your account type to get started</p>
 
           <div className="grid md:grid-cols-3 gap-6">

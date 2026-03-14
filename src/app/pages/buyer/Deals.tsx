@@ -37,6 +37,7 @@ export default function BuyerDeals() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDealType, setSelectedDealType] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [, setTick] = useState(0);
   const [sortBy, setSortBy] = useState('discount-high');
 
   useEffect(() => {
@@ -78,6 +79,12 @@ export default function BuyerDeals() {
       setProducts(deals);
       setFilteredProducts(deals);
     }).catch(() => {});
+  }, []);
+
+  // Tick every second so countdown timers stay live
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {

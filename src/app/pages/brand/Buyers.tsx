@@ -53,18 +53,23 @@ export default function BrandBuyers() {
     try {
       const res = await api.get<{ buyers: Record<string, unknown>[] }>('/admin/buyers');
       const rawBuyers = (res.data as unknown as { buyers: Record<string, unknown>[] }).buyers || [];
-      setBuyers(rawBuyers.map((b) => ({
-        id: b.id as string,
-        name: (b.full_name as string) || '',
-        email: (b.email as string) || '',
-        phone: (b.phone_number as string) || '—',
-        status: (b.status === 'active' ? 'active' : 'suspended') as Buyer['status'],
-        totalOrders: (b.total_orders as number) || 0,
-        totalSpent: `₦${((b.total_spent as number) || 0).toLocaleString()}`,
-        lastOrder: b.last_order_date ? new Date(b.last_order_date as string).toLocaleDateString() : 'Never',
-        joinedDate: b.created_at ? new Date(b.created_at as string).toLocaleDateString() : '—',
-        verified: !!(b.is_verified),
-      })));
+      setBuyers(rawBuyers.map((b) => {
+        const lastOrderObj = b.lastOrder as Record<string, unknown> | null;
+        return {
+          id: b.id as string,
+          name: (b.full_name as string) || '',
+          email: (b.email as string) || '',
+          phone: (b.phone_number as string) || '—',
+          status: (b.status === 'active' ? 'active' : 'suspended') as Buyer['status'],
+          totalOrders: (b.totalOrders as number) || 0,
+          totalSpent: `₦${((b.totalSpent as number) || 0).toLocaleString()}`,
+          lastOrder: lastOrderObj?.created_at
+            ? new Date(lastOrderObj.created_at as string).toLocaleDateString()
+            : 'Never',
+          joinedDate: b.created_at ? new Date(b.created_at as string).toLocaleDateString() : '—',
+          verified: !!(b.is_verified),
+        };
+      }));
     } catch {
       toast.error('Failed to load buyers');
     } finally {
@@ -141,7 +146,7 @@ export default function BrandBuyers() {
   const totalBuyers = buyers.length;
   const activeBuyers = buyers.filter((b) => b.status === 'active').length;
   const verifiedBuyers = buyers.filter((b) => b.verified).length;
-  const totalRevenue = buyers.reduce((sum, b) => sum + parseFloat(b.totalSpent.replace(/[$,]/g, '')), 0);
+  const totalRevenue = buyers.reduce((sum, b) => sum + parseFloat(b.totalSpent.replace(/[₦,]/g, '')), 0);
 
   return (
     <DashboardLayout role="brand">
@@ -170,7 +175,7 @@ export default function BrandBuyers() {
           <Card className="p-4">
             <div className="text-sm text-gray-600">Total Revenue</div>
             <div className="text-2xl font-bold mt-1" style={{ color: '#BE220E' }}>
-              ${totalRevenue.toLocaleString()}
+              ₦{totalRevenue.toLocaleString()}
             </div>
           </Card>
         </div>

@@ -168,7 +168,7 @@ export default function ProductDetail() {
               <div className="w-8 h-8 bg-[#BE220E] rounded-lg flex items-center justify-center">
                 <Home className="w-5 h-5 text-white" />
               </div>
-              <span className="font-bold text-lg hidden md:inline">Anointed</span>
+              <span className="font-bold text-lg hidden md:inline">VeevillHub</span>
             </Link>
           </div>
 

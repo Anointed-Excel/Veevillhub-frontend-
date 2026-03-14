@@ -19,7 +19,7 @@ export default function BrandSettings() {
   const [profileLoading, setProfileLoading] = useState(true);
 
   const [settings, setSettings] = useState({
-    platformName: 'Anointed',
+    platformName: 'VeevillHub',
     platformEmail: 'support@anointed.com',
     commissionRate: '10',
     minWithdrawal: '1000',

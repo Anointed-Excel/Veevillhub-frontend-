@@ -312,7 +312,10 @@ export default function BrandProducts() {
 
   const handleExport = () => {
     const csv = ['SKU,Name,Category,Price,Stock,Status'].concat(
-      products.map((p) => `${p.sku},${p.name},${p.categoryName || p.categoryId},${p.price},${p.stock},${p.status}`)
+      products.map((p) => {
+        const catName = categories.find((c) => c.id === p.categoryId)?.name || p.categoryId;
+        return `${p.sku},${p.name},${catName},${p.price},${p.stock},${p.status}`;
+      })
     ).join('\n');
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
@@ -514,7 +517,7 @@ export default function BrandProducts() {
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
             <DialogHeader>
               <DialogTitle>Add New Product</DialogTitle>
-              <DialogDescription>Create a new product for Anointed</DialogDescription>
+              <DialogDescription>Create a new product for VeevillHub</DialogDescription>
             </DialogHeader>
             <Tabs defaultValue="general" className="w-full flex-1 overflow-hidden flex flex-col">
               <TabsList className="grid w-full grid-cols-6">

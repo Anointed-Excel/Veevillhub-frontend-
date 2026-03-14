@@ -99,17 +99,26 @@ export default function BuyerHome() {
     const params = new URLSearchParams();
     params.set('limit', '24');
     if (searchQuery) params.set('search', searchQuery);
-    if (selectedCategory !== 'all') params.set('category_id', selectedCategory);
-    if (priceRange[0] > 0) params.set('min_price', String(priceRange[0]));
-    if (priceRange[1] > 0) params.set('max_price', String(priceRange[1]));
-    params.set('sort', sortBy);
+    if (selectedCategory !== 'all') params.set('category', selectedCategory);
+    if (priceRange[0] > 0) params.set('minPrice', String(priceRange[0]));
+    if (priceRange[1] > 0) params.set('maxPrice', String(priceRange[1]));
+    // Map frontend sort values to backend sortBy + sortOrder
+    const sortMap: Record<string, { sortBy: string; sortOrder: string }> = {
+      newest:     { sortBy: 'created_at',    sortOrder: 'desc' },
+      popular:    { sortBy: 'created_at',    sortOrder: 'desc' },
+      price_asc:  { sortBy: 'regular_price', sortOrder: 'asc'  },
+      price_desc: { sortBy: 'regular_price', sortOrder: 'desc' },
+    };
+    const sort = sortMap[sortBy] || sortMap.newest;
+    params.set('sortBy', sort.sortBy);
+    params.set('sortOrder', sort.sortOrder);
 
     api.get<unknown>(`/shop/products?${params.toString()}`).then((res) => {
       const data = res.data as Record<string, unknown>;
       const raw = (data.products || []) as Record<string, unknown>[];
       const mapped = raw.map(mapProduct);
       setProducts(mapped);
-      setTotalResults((data.pagination as Record<string, unknown>)?.total as number || mapped.length);
+      setTotalResults(res.pagination?.totalResults || mapped.length);
 
       // Flash deals and featured only when showing default view
       if (!searchQuery && selectedCategory === 'all') {
@@ -208,7 +217,7 @@ export default function BuyerHome() {
                 <div className="w-8 h-8 bg-[#BE220E] rounded-lg flex items-center justify-center">
                   <Home className="w-5 h-5 text-white" />
                 </div>
-                <span className="font-bold text-lg">Anointed</span>
+                <span className="font-bold text-lg">VeevillHub</span>
               </Link>
             </div>
             <div className="flex items-center gap-2">

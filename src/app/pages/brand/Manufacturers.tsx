@@ -1,12 +1,23 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
-import { Search, Download, Eye, Edit2, Trash2, Ban, CheckCircle, Building2, FileText, MapPin, Calendar } from 'lucide-react';
+import { Search, Download, Eye, Trash2, Ban, CheckCircle, Building2, FileText, MapPin, Calendar, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { api, ApiError } from '@/lib/api';
+
+interface BusinessProfile {
+  company_name: string | null;
+  cac_number: string | null;
+  tin_number: string | null;
+  business_address: string | null;
+  proof_of_address_url: string | null;
+  registration_date: string | null;
+  verified_date: string | null;
+}
 
 interface Manufacturer {
   id: string;
@@ -14,89 +25,61 @@ interface Manufacturer {
   email: string;
   phone: string;
   status: 'approved' | 'pending' | 'suspended';
-  products: number;
-  revenue: string;
+  totalProducts: number;
   joinedDate: string;
-  // Verification details
-  cacNumber: string;
-  tinNumber: string;
-  proofOfAddress: string;
-  businessAddress: string;
-  registrationDate: string;
-  verifiedDate?: string;
+  isVerified: boolean;
+  profile: BusinessProfile | null;
 }
 
+// Map backend status → frontend display
+const statusFromBackend = (s: string): Manufacturer['status'] => {
+  if (s === 'active') return 'approved';
+  if (s === 'inactive') return 'pending';
+  return 'suspended';
+};
+const statusToBackend = (s: string): string => {
+  if (s === 'approved') return 'active';
+  if (s === 'pending') return 'inactive';
+  return 'suspended';
+};
+
 export default function BrandManufacturers() {
-  const [manufacturers, setManufacturers] = useState<Manufacturer[]>([
-    { 
-      id: '1', 
-      companyName: 'Golden Pasta Co.', 
-      email: 'contact@goldenpasta.ng', 
-      phone: '+234 800 123 4567', 
-      status: 'approved', 
-      products: 45, 
-      revenue: '$45,890', 
-      joinedDate: '2024-01-15',
-      cacNumber: 'RC-1234567',
-      tinNumber: '12345678-0001',
-      proofOfAddress: 'utility_bill_jan2024.pdf',
-      businessAddress: '45 Industrial Avenue, Ikeja, Lagos',
-      registrationDate: '2020-03-15',
-      verifiedDate: '2024-01-16'
-    },
-    { 
-      id: '2', 
-      companyName: 'Alaro Foods Ltd', 
-      email: 'info@alarofoods.ng', 
-      phone: '+234 800 234 5678', 
-      status: 'approved', 
-      products: 32, 
-      revenue: '$32,100', 
-      joinedDate: '2024-02-20',
-      cacNumber: 'RC-2345678',
-      tinNumber: '23456789-0001',
-      proofOfAddress: 'lease_agreement_2024.pdf',
-      businessAddress: '12 Food Processing Zone, Ogun State',
-      registrationDate: '2019-08-22',
-      verifiedDate: '2024-02-21'
-    },
-    { 
-      id: '3', 
-      companyName: 'Lagos Beverages', 
-      email: 'sales@lagosbev.ng', 
-      phone: '+234 800 345 6789', 
-      status: 'pending', 
-      products: 0, 
-      revenue: '$0', 
-      joinedDate: '2024-06-10',
-      cacNumber: 'RC-3456789',
-      tinNumber: '34567890-0001',
-      proofOfAddress: 'utility_bill_june2024.pdf',
-      businessAddress: '78 Marina Road, Lagos Island, Lagos',
-      registrationDate: '2023-11-10',
-    },
-    { 
-      id: '4', 
-      companyName: 'Naija Snacks Inc', 
-      email: 'contact@naijasnacks.ng', 
-      phone: '+234 800 456 7890', 
-      status: 'suspended', 
-      products: 18, 
-      revenue: '$12,450', 
-      joinedDate: '2024-03-05',
-      cacNumber: 'RC-4567890',
-      tinNumber: '45678901-0001',
-      proofOfAddress: 'property_deed_2023.pdf',
-      businessAddress: '23 Snack Lane, Abuja',
-      registrationDate: '2021-05-18',
-      verifiedDate: '2024-03-06'
-    },
-  ]);
+  const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadManufacturers = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<Record<string, unknown>[]>('/admin/manufacturers');
+      const raw = (res.data as unknown as Record<string, unknown>[]) || [];
+      setManufacturers(raw.map((m) => {
+        const bp = m.business_profile as BusinessProfile | null;
+        return {
+          id: m.id as string,
+          companyName: (bp?.company_name) || (m.full_name as string) || '',
+          email: m.email as string,
+          phone: (m.phone_number as string) || '—',
+          status: statusFromBackend(m.status as string),
+          totalProducts: (m.totalProducts as number) || 0,
+          joinedDate: m.created_at ? new Date(m.created_at as string).toLocaleDateString() : '—',
+          isVerified: !!(m.is_verified),
+          profile: bp || null,
+        };
+      }));
+    } catch {
+      toast.error('Failed to load manufacturers');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadManufacturers(); }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedManufacturer, setSelectedManufacturer] = useState<Manufacturer | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const filteredManufacturers = manufacturers.filter((mfg) => {
     const matchesSearch = mfg.companyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -105,27 +88,24 @@ export default function BrandManufacturers() {
     return matchesSearch && matchesStatus;
   });
 
-  const handleApprove = (id: string) => {
-    setManufacturers(manufacturers.map((mfg) =>
-      mfg.id === id ? { ...mfg, status: 'approved' as const } : mfg
-    ));
-    toast.success('Manufacturer approved');
-  };
-
-  const handleSuspend = (id: string) => {
-    if (confirm('Are you sure you want to suspend this manufacturer?')) {
-      setManufacturers(manufacturers.map((mfg) =>
-        mfg.id === id ? { ...mfg, status: 'suspended' as const } : mfg
-      ));
-      toast.success('Manufacturer suspended');
+  const handleStatusChange = async (id: string, newStatus: Manufacturer['status']) => {
+    setActionLoading(true);
+    try {
+      await api.patch(`/admin/manufacturers/${id}/status`, { status: statusToBackend(newStatus) });
+      setManufacturers(manufacturers.map((m) => m.id === id ? { ...m, status: newStatus } : m));
+      if (selectedManufacturer?.id === id) {
+        setSelectedManufacturer((prev) => prev ? { ...prev, status: newStatus } : prev);
+      }
+      toast.success(`Manufacturer ${newStatus}`);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to update status');
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this manufacturer?')) {
-      setManufacturers(manufacturers.filter((mfg) => mfg.id !== id));
-      toast.success('Manufacturer deleted');
-    }
+    toast.error('Delete is not supported — suspend the account instead');
   };
 
   const handleView = (mfg: Manufacturer) => {
@@ -134,26 +114,17 @@ export default function BrandManufacturers() {
   };
 
   const handleExport = () => {
-    toast.success('Exporting manufacturers data...');
-  };
-
-  const handleVerifyTIN = (manufacturer: Manufacturer) => {
-    toast.success(`Verifying TIN Number: ${manufacturer.tinNumber}`, {
-      description: 'Document verification in progress...',
-      duration: 3000,
-    });
-    // Simulate verification process
-    setTimeout(() => {
-      toast.success('TIN Number verified successfully!');
-    }, 2000);
-  };
-
-  const handleDownloadProofOfAddress = (manufacturer: Manufacturer) => {
-    toast.success(`Downloading: ${manufacturer.proofOfAddress}`, {
-      description: 'Your download will begin shortly',
-      duration: 2000,
-    });
-    // Simulate download
+    const rows = manufacturers.map((m) =>
+      `${m.companyName},${m.email},${m.phone},${m.status},${m.totalProducts},${m.joinedDate}`
+    );
+    const csv = ['Company,Email,Phone,Status,Products,Joined', ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'manufacturers.csv';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -225,76 +196,93 @@ export default function BrandManufacturers() {
 
         {/* Table */}
         <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Products</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Revenue</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredManufacturers.map((mfg) => (
-                  <tr key={mfg.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        <div className="w-10 h-10 rounded-full bg-[#BE220E] text-white flex items-center justify-center">
-                          <Building2 className="w-5 h-5" />
-                        </div>
-                        <div className="ml-4">
-                          <div className="font-medium">{mfg.companyName}</div>
-                          <div className="text-sm text-gray-500">{mfg.joinedDate}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm">{mfg.email}</div>
-                      <div className="text-sm text-gray-500">{mfg.phone}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="font-medium">{mfg.products}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="font-bold text-green-600">{mfg.revenue}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        mfg.status === 'approved' ? 'bg-green-100 text-green-700' :
-                        mfg.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-red-100 text-red-700'
-                      }`}>
-                        {mfg.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <Button onClick={() => handleView(mfg)} variant="ghost" size="sm">
-                          <Eye className="w-4 h-4 text-blue-600" />
-                        </Button>
-                        {mfg.status === 'pending' && (
-                          <Button onClick={() => handleApprove(mfg.id)} variant="ghost" size="sm">
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                          </Button>
-                        )}
-                        {mfg.status === 'approved' && (
-                          <Button onClick={() => handleSuspend(mfg.id)} variant="ghost" size="sm">
-                            <Ban className="w-4 h-4 text-red-600" />
-                          </Button>
-                        )}
-                        <Button onClick={() => handleDelete(mfg.id)} variant="ghost" size="sm">
-                          <Trash2 className="w-4 h-4 text-red-600" />
-                        </Button>
-                      </div>
-                    </td>
+          {loading ? (
+            <div className="flex justify-center py-16">
+              <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Products</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredManufacturers.map((mfg) => (
+                    <tr key={mfg.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center">
+                          <div className="w-10 h-10 rounded-full bg-[#BE220E] text-white flex items-center justify-center">
+                            <Building2 className="w-5 h-5" />
+                          </div>
+                          <div className="ml-4">
+                            <div className="font-medium flex items-center gap-2">
+                              {mfg.companyName}
+                              {mfg.isVerified && <CheckCircle className="w-4 h-4 text-green-500" />}
+                            </div>
+                            <div className="text-sm text-gray-500">{mfg.joinedDate}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm">{mfg.email}</div>
+                        <div className="text-sm text-gray-500">{mfg.phone}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="font-medium">{mfg.totalProducts}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          mfg.status === 'approved' ? 'bg-green-100 text-green-700' :
+                          mfg.status === 'pending'  ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {mfg.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <Button onClick={() => handleView(mfg)} variant="ghost" size="sm">
+                            <Eye className="w-4 h-4 text-blue-600" />
+                          </Button>
+                          {mfg.status === 'pending' && (
+                            <Button onClick={() => handleStatusChange(mfg.id, 'approved')} variant="ghost" size="sm">
+                              <CheckCircle className="w-4 h-4 text-green-600" />
+                            </Button>
+                          )}
+                          {mfg.status === 'approved' && (
+                            <Button onClick={() => handleStatusChange(mfg.id, 'suspended')} variant="ghost" size="sm">
+                              <Ban className="w-4 h-4 text-red-600" />
+                            </Button>
+                          )}
+                          {mfg.status === 'suspended' && (
+                            <Button onClick={() => handleStatusChange(mfg.id, 'approved')} variant="ghost" size="sm">
+                              <CheckCircle className="w-4 h-4 text-green-600" />
+                            </Button>
+                          )}
+                          <Button onClick={() => handleDelete(mfg.id)} variant="ghost" size="sm">
+                            <Trash2 className="w-4 h-4 text-red-600" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredManufacturers.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                        No manufacturers found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
 
         {/* View Modal */}
@@ -306,7 +294,7 @@ export default function BrandManufacturers() {
             </DialogHeader>
             {selectedManufacturer && (
               <div className="space-y-6">
-                {/* Header Section */}
+                {/* Header */}
                 <div className="flex items-center gap-4 pb-4 border-b">
                   <div className="w-16 h-16 rounded-full bg-[#BE220E] text-white flex items-center justify-center">
                     <Building2 className="w-8 h-8" />
@@ -317,14 +305,14 @@ export default function BrandManufacturers() {
                   </div>
                   <span className={`px-4 py-2 rounded-full text-sm font-medium ${
                     selectedManufacturer.status === 'approved' ? 'bg-green-100 text-green-700' :
-                    selectedManufacturer.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                    selectedManufacturer.status === 'pending'  ? 'bg-yellow-100 text-yellow-700' :
                     'bg-red-100 text-red-700'
                   }`}>
                     {selectedManufacturer.status}
                   </span>
                 </div>
 
-                {/* Basic Information */}
+                {/* Basic Info */}
                 <div>
                   <h3 className="font-semibold text-sm text-gray-900 mb-3 flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-[#BE220E]" />
@@ -337,24 +325,24 @@ export default function BrandManufacturers() {
                     </div>
                     <div>
                       <div className="text-sm text-gray-600">Business Address</div>
-                      <div className="font-medium mt-1">{selectedManufacturer.businessAddress}</div>
+                      <div className="font-medium mt-1">
+                        {selectedManufacturer.profile?.business_address || '—'}
+                      </div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-600">Products</div>
-                      <div className="font-medium mt-1">{selectedManufacturer.products}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600">Revenue</div>
-                      <div className="font-medium mt-1 text-green-600">{selectedManufacturer.revenue}</div>
+                      <div className="font-medium mt-1">{selectedManufacturer.totalProducts}</div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-600">Joined Date</div>
                       <div className="font-medium mt-1">{selectedManufacturer.joinedDate}</div>
                     </div>
-                    {selectedManufacturer.verifiedDate && (
+                    {selectedManufacturer.profile?.verified_date && (
                       <div>
                         <div className="text-sm text-gray-600">Verified Date</div>
-                        <div className="font-medium mt-1">{selectedManufacturer.verifiedDate}</div>
+                        <div className="font-medium mt-1">
+                          {new Date(selectedManufacturer.profile.verified_date).toLocaleDateString()}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -366,76 +354,77 @@ export default function BrandManufacturers() {
                     <FileText className="w-4 h-4 text-[#BE220E]" />
                     Verification Documents
                   </h3>
-                  <div className="space-y-3">
-                    <div className="p-4 border border-gray-200 rounded-lg hover:border-[#BE220E] transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">CAC Registration Number</div>
-                          <div className="text-lg font-bold mt-1 text-[#BE220E]">{selectedManufacturer.cacNumber}</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm text-gray-600">Registered: {selectedManufacturer.registrationDate}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-4 border border-gray-200 rounded-lg hover:border-[#BE220E] transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">TIN Number</div>
-                          <div className="text-lg font-bold mt-1 text-[#BE220E]">{selectedManufacturer.tinNumber}</div>
-                        </div>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleVerifyTIN(selectedManufacturer)}
-                        >
-                          <Eye className="w-4 h-4 mr-2" />
-                          Verify
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="p-4 border border-gray-200 rounded-lg hover:border-[#BE220E] transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <MapPin className="w-5 h-5 text-gray-400" />
+                  {selectedManufacturer.profile ? (
+                    <div className="space-y-3">
+                      <div className="p-4 border border-gray-200 rounded-lg">
+                        <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-sm font-medium text-gray-900">Proof of Address</div>
-                            <div className="text-sm text-gray-600 mt-1">{selectedManufacturer.proofOfAddress}</div>
+                            <div className="text-sm font-medium text-gray-900">CAC Registration Number</div>
+                            <div className="text-lg font-bold mt-1 text-[#BE220E]">
+                              {selectedManufacturer.profile.cac_number || '—'}
+                            </div>
+                          </div>
+                          {selectedManufacturer.profile.registration_date && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Calendar className="w-4 h-4 text-gray-400" />
+                              Registered: {new Date(selectedManufacturer.profile.registration_date).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="p-4 border border-gray-200 rounded-lg">
+                        <div className="text-sm font-medium text-gray-900">TIN Number</div>
+                        <div className="text-lg font-bold mt-1 text-[#BE220E]">
+                          {selectedManufacturer.profile.tin_number || '—'}
+                        </div>
+                      </div>
+
+                      {selectedManufacturer.profile.proof_of_address_url && (
+                        <div className="p-4 border border-gray-200 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <MapPin className="w-5 h-5 text-gray-400" />
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">Proof of Address</div>
+                                <div className="text-sm text-gray-600 mt-1">
+                                  {selectedManufacturer.profile.proof_of_address_url}
+                                </div>
+                              </div>
+                            </div>
+                            <Button variant="outline" size="sm" asChild>
+                              <a href={selectedManufacturer.profile.proof_of_address_url} target="_blank" rel="noreferrer">
+                                View
+                              </a>
+                            </Button>
                           </div>
                         </div>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleDownloadProofOfAddress(selectedManufacturer)}
-                        >
-                          <Download className="w-4 h-4 mr-2" />
-                          Download
-                        </Button>
-                      </div>
+                      )}
                     </div>
-                  </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 p-4 bg-gray-50 rounded-lg">
+                      No verification documents submitted yet.
+                    </p>
+                  )}
                 </div>
 
-                {/* Action Buttons for Pending Status */}
+                {/* Approve banner for pending */}
                 {selectedManufacturer.status === 'pending' && (
                   <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <p className="text-sm text-yellow-800 mb-3">This manufacturer is pending approval. Review all documents before approving.</p>
+                    <p className="text-sm text-yellow-800 mb-3">
+                      This manufacturer is pending approval. Review all documents before approving.
+                    </p>
                     <div className="flex gap-2">
-                      <Button 
+                      <Button
+                        disabled={actionLoading}
                         onClick={() => {
-                          handleApprove(selectedManufacturer.id);
+                          handleStatusChange(selectedManufacturer.id, 'approved');
                           setShowViewModal(false);
                         }}
                         className="text-white bg-green-600 hover:bg-green-700"
                       >
                         <CheckCircle className="w-4 h-4 mr-2" />
                         Approve Manufacturer
-                      </Button>
-                      <Button variant="outline">
-                        Request More Info
                       </Button>
                     </div>
                   </div>
