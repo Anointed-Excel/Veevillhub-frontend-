@@ -8,8 +8,10 @@ import { Input } from '@/app/components/ui/input';
 import {
   Home, ShoppingCart, Package, User, Heart, Search,
   Star, TrendingUp, Sparkles, ArrowLeft, Monitor, Sofa,
-  Dumbbell, Smartphone, Watch, Headphones, Shirt, Grid, Loader2,
+  Dumbbell, Smartphone, Watch, Headphones, Shirt, Grid,
 } from 'lucide-react';
+import EmptyState from '@/app/components/EmptyState';
+import { Skeleton } from '@/app/components/ui/skeleton';
 
 interface Category {
   id: string;
@@ -153,18 +155,24 @@ export default function BuyerCategories() {
 
         {/* Categories Grid */}
         {loading ? (
-          <div className="flex justify-center py-20">
-            <Loader2 className="w-10 h-10 animate-spin text-[#BE220E]" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Card key={i} className="overflow-hidden">
+                <Skeleton className="h-40 w-full" />
+                <div className="p-4 space-y-2">
+                  <Skeleton className="h-4 w-3/4 rounded" />
+                  <Skeleton className="h-3 w-1/2 rounded" />
+                </div>
+              </Card>
+            ))}
           </div>
         ) : filteredCategories.length === 0 ? (
-          <Card className="p-12 text-center">
-            <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No categories found</h3>
-            <p className="text-gray-600 mb-4">Try a different search term</p>
-            <Button onClick={() => setSearchQuery('')} className="bg-[#BE220E] hover:bg-[#9a1b0b]">
-              Clear Search
-            </Button>
-          </Card>
+          <EmptyState
+            icon={Package}
+            title="No categories found"
+            description="Try a different search term"
+            action={searchQuery ? { label: 'Clear Search', onClick: () => setSearchQuery('') } : undefined}
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredCategories.map((category) => {

@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/app/components/ui/tabs';
 import { Plus, Search, Download, Eye, Trash2, Upload, Package, Image as ImageIcon, Tag, X, Loader2, RefreshCw } from 'lucide-react';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import EmptyState from '@/app/components/EmptyState';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
 
@@ -442,9 +444,28 @@ export default function BrandProducts() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
-                  <tr><td colSpan={7} className="px-6 py-12 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-gray-400" /></td></tr>
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-4 rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-full rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-20 rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-16 rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-20 rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-24 rounded" /></td>
+                    </tr>
+                  ))
                 ) : filteredProducts.length === 0 ? (
-                  <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-500">No products found</td></tr>
+                  <tr>
+                    <td colSpan={7} className="py-2">
+                      <EmptyState
+                        icon={Package}
+                        title={searchQuery || filterCategory !== 'all' || filterStatus !== 'all' ? 'No products match your filters' : 'No products yet'}
+                        description={searchQuery || filterCategory !== 'all' || filterStatus !== 'all' ? 'Try adjusting your search or filters.' : 'Add your first product to get started.'}
+                        action={searchQuery || filterCategory !== 'all' || filterStatus !== 'all' ? { label: 'Clear Filters', onClick: () => { setSearchQuery(''); setFilterCategory('all'); setFilterStatus('all'); } } : { label: 'Add Product', onClick: () => setShowCreateModal(true) }}
+                      />
+                    </td>
+                  </tr>
                 ) : filteredProducts.map((product) => (
                   <tr key={product.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4">

@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Tag, Edit2, Trash2, Eye, Calendar, Percent, DollarSign, Package, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import EmptyState from '@/app/components/EmptyState';
 
 interface Promotion {
   id: string;
@@ -307,8 +309,18 @@ export default function BrandPromotions() {
 
         {/* Promotions Grid */}
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i} className="p-6">
+                <Skeleton className="h-14 w-14 rounded-lg mb-4" />
+                <Skeleton className="h-5 w-3/4 rounded mb-2" />
+                <Skeleton className="h-4 w-full rounded mb-1" />
+                <Skeleton className="h-4 w-2/3 rounded mb-4" />
+                <Skeleton className="h-4 w-full rounded mb-2" />
+                <Skeleton className="h-4 w-full rounded mb-2" />
+                <Skeleton className="h-4 w-full rounded" />
+              </Card>
+            ))}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -388,24 +400,16 @@ export default function BrandPromotions() {
 
         {/* Empty State */}
         {!loading && filteredPromotions.length === 0 && (
-          <Card className="p-12 text-center">
-            <Tag className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-            <h3 className="text-xl font-semibold mb-2">No Promotions Found</h3>
-            <p className="text-gray-600 mb-4">
-              {searchQuery || filterStatus !== 'all'
-                ? 'Try adjusting your filters'
-                : 'Create your first promotion to get started'}
-            </p>
-            {!searchQuery && filterStatus === 'all' && (
-              <Button
-                onClick={() => { setFormData(emptyForm); setShowCreateModal(true); }}
-                className="text-white"
-                style={{ backgroundColor: '#BE220E' }}
-              >
-                <Plus className="w-4 h-4 mr-2" /> Create Promotion
-              </Button>
-            )}
-          </Card>
+          <EmptyState
+            icon={Tag}
+            title={searchQuery || filterStatus !== 'all' ? 'No promotions match your filters' : 'No promotions yet'}
+            description={searchQuery || filterStatus !== 'all' ? 'Try adjusting your search or status filter.' : 'Create your first promotion to drive sales.'}
+            action={
+              searchQuery || filterStatus !== 'all'
+                ? { label: 'Clear Filters', onClick: () => { setSearchQuery(''); setFilterStatus('all'); } }
+                : { label: 'Create Promotion', onClick: () => { setFormData(emptyForm); setShowCreateModal(true); } }
+            }
+          />
         )}
 
         {/* Create / Edit Modal */}

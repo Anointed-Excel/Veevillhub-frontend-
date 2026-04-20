@@ -6,6 +6,7 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/app/components/ui/dialog';
 import { DollarSign, TrendingUp, TrendingDown, ArrowDownRight, ArrowUpRight, Download } from 'lucide-react';
+import EmptyState from '@/app/components/EmptyState';
 import { toast } from 'sonner';
 
 interface Transaction {
@@ -126,6 +127,13 @@ export default function ManufacturerWallet() {
         {/* Transaction History */}
         <Card className="p-6">
           <h2 className="text-xl font-bold mb-4">Transaction History</h2>
+          {transactions.length === 0 ? (
+            <EmptyState
+              icon={DollarSign}
+              title="No transactions yet"
+              description="Payments from retailers will appear here once orders are fulfilled."
+            />
+          ) : (
           <div className="space-y-3">
             {transactions.map((transaction) => (
               <div key={transaction.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
@@ -161,6 +169,7 @@ export default function ManufacturerWallet() {
               </div>
             ))}
           </div>
+          )}
         </Card>
 
         {/* Withdraw Modal */}

@@ -22,6 +22,8 @@ import {
   User,
   ShoppingCart,
 } from 'lucide-react';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import EmptyState from '@/app/components/EmptyState';
 
 interface Order {
   id: string;
@@ -49,10 +51,12 @@ export default function BuyerOrders() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   useEffect(() => {
+    setLoading(true);
     api.get<unknown>('/orders').then((res) => {
       const data = res.data as Record<string, unknown>;
       const raw = (data.orders || []) as Record<string, unknown>[];
@@ -70,7 +74,7 @@ export default function BuyerOrders() {
       }));
       setOrders(mapped);
       setFilteredOrders(mapped);
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setLoading(false));
   }, [user]);
 
   useEffect(() => {
@@ -192,25 +196,39 @@ export default function BuyerOrders() {
       </header>
 
       <div className="max-w-5xl mx-auto p-4">
-        {filteredOrders.length === 0 ? (
-          <Card className="p-12 text-center">
-            <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">
-              {searchQuery || statusFilter !== 'all' ? 'No orders found' : 'No orders yet'}
-            </h3>
-            <p className="text-gray-600 mb-6">
-              {searchQuery || statusFilter !== 'all'
-                ? 'Try adjusting your filters'
-                : 'Start shopping to see your orders here'}
-            </p>
-            {!searchQuery && statusFilter === 'all' && (
-              <Link to="/buyer">
-                <Button className="bg-[#BE220E] hover:bg-[#9a1b0b]">
-                  Start Shopping
-                </Button>
-              </Link>
-            )}
-          </Card>
+        {loading ? (
+          <div className="space-y-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i} className="p-4">
+                <div className="flex items-start justify-between mb-4 pb-4 border-b">
+                  <div className="space-y-1">
+                    <Skeleton className="h-4 w-32 rounded" />
+                    <Skeleton className="h-3 w-24 rounded" />
+                  </div>
+                  <Skeleton className="h-6 w-24 rounded-full" />
+                </div>
+                <div className="flex gap-3 mb-4">
+                  <Skeleton className="h-12 w-12 rounded" />
+                  <div className="flex-1 space-y-1">
+                    <Skeleton className="h-4 w-1/2 rounded" />
+                    <Skeleton className="h-3 w-1/4 rounded" />
+                  </div>
+                </div>
+                <Skeleton className="h-10 w-full rounded" />
+              </Card>
+            ))}
+          </div>
+        ) : filteredOrders.length === 0 ? (
+          <EmptyState
+            icon={Package}
+            title={searchQuery || statusFilter !== 'all' ? 'No orders match your filters' : 'No orders yet'}
+            description={searchQuery || statusFilter !== 'all' ? 'Try adjusting your search or status filter.' : 'Start shopping to see your orders here.'}
+            action={
+              searchQuery || statusFilter !== 'all'
+                ? { label: 'Clear Filters', onClick: () => { setSearchQuery(''); setStatusFilter('all'); } }
+                : { label: 'Start Shopping', onClick: () => navigate('/buyer/shop') }
+            }
+          />
         ) : (
           <div className="space-y-4">
             {filteredOrders.map((order) => {

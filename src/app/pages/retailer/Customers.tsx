@@ -7,6 +7,7 @@ import { Label } from '@/app/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Search, Eye, Mail, Phone, MapPin, ShoppingBag, DollarSign, Calendar, TrendingUp, UserPlus } from 'lucide-react';
+import EmptyState from '@/app/components/EmptyState';
 import { toast } from 'sonner';
 import { copyToClipboard } from '@/utils/clipboard';
 
@@ -380,13 +381,12 @@ export default function Customers() {
         </div>
 
         {filteredCustomers.length === 0 && (
-          <Card className="p-12">
-            <div className="text-center">
-              <ShoppingBag className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-bold mb-2">No customers found</h3>
-              <p className="text-gray-600">Try adjusting your filters or search query</p>
-            </div>
-          </Card>
+          <EmptyState
+            icon={ShoppingBag}
+            title={searchTerm || filterSegment !== 'all' ? 'No customers match your filters' : 'No customers yet'}
+            description={searchTerm || filterSegment !== 'all' ? 'Try adjusting your search or segment filter.' : 'Customers who purchase from you will appear here.'}
+            action={searchTerm || filterSegment !== 'all' ? { label: 'Clear Filters', onClick: () => { setSearchTerm(''); setFilterSegment('all'); } } : undefined}
+          />
         )}
       </div>
 

@@ -5,6 +5,7 @@ import { Button } from '@/app/components/ui/button';
 import { Users, Building2, Store, ShoppingBag, Package, ShoppingCart, TrendingUp, DollarSign, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
+import { Skeleton } from '@/app/components/ui/skeleton';
 
 export default function BrandDashboard() {
   const [totalUsers, setTotalUsers] = useState<number | null>(null);
@@ -104,7 +105,7 @@ export default function BrandDashboard() {
                 </div>
                 <div className="text-gray-600 text-sm">{stat.label}</div>
                 <div className="text-3xl font-bold mt-2" style={{ color: stat.color }}>
-                  {stat.value}
+                  {stat.value === '—' ? <Skeleton className="h-8 w-20 rounded" /> : stat.value}
                 </div>
                 <Link to={stat.link} className="text-sm text-blue-500 mt-2">View Details</Link>
               </Card>

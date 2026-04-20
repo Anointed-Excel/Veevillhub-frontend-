@@ -4,6 +4,7 @@ import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, Users, Package, Calendar, Download } from 'lucide-react';
+import EmptyState from '@/app/components/EmptyState';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function RetailerAnalytics() {
@@ -305,6 +306,13 @@ export default function RetailerAnalytics() {
           {/* Top Products */}
           <Card className="p-6">
             <h2 className="text-xl font-bold mb-4">Top Selling Products</h2>
+            {topProducts.length === 0 ? (
+              <EmptyState
+                icon={TrendingUp}
+                title="No sales data yet"
+                description="Top selling products will appear here once you start receiving orders."
+              />
+            ) : (
             <div className="space-y-3">
               {topProducts.map((product, index) => (
                 <div key={product.name} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
@@ -329,6 +337,7 @@ export default function RetailerAnalytics() {
                 </div>
               ))}
             </div>
+            )}
           </Card>
 
           {/* Revenue by Channel */}

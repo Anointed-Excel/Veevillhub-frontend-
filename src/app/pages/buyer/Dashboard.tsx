@@ -1,4 +1,6 @@
 import DashboardLayout from '@/app/components/DashboardLayout';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import EmptyState from '@/app/components/EmptyState';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import {
@@ -16,7 +18,7 @@ import {
   CreditCard,
   ShoppingBag
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,10 +38,13 @@ interface Product {
 
 export default function BuyerDashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { cartCount, wishlistCount, addToCart, addToWishlist } = useCart();
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [recommendedProducts, setRecommendedProducts] = useState<Product[]>([]);
   const [dashStats, setDashStats] = useState<{ totalOrders?: number; activeOrders?: number } | null>(null);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [productsLoading, setProductsLoading] = useState(true);
 
   useEffect(() => {
     // Load recent orders from API
@@ -54,7 +59,7 @@ export default function BuyerDashboard() {
         date: o.created_at,
         estimatedDelivery: o.estimated_delivery,
       })));
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setOrdersLoading(false));
 
     // Load recommended products from shop
     api.get<unknown>('/shop/products?limit=4').then((res) => {
@@ -68,7 +73,7 @@ export default function BuyerDashboard() {
         category: '',
         discount: p.sales_price ? Math.round((1 - Number(p.sales_price) / Number(p.regular_price)) * 100) : 0,
       })));
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setProductsLoading(false));
 
     // Load dashboard stats
     api.get<unknown>('/buyer/dashboard').then((res) => {
@@ -162,7 +167,7 @@ export default function BuyerDashboard() {
                   </div>
                   <div className="text-gray-600 text-sm">{stat.label}</div>
                   <div className="text-3xl font-bold mt-2" style={{ color: stat.color }}>
-                    {stat.value}
+                    {stat.value === '—' ? <Skeleton className="h-8 w-20 rounded" /> : stat.value}
                   </div>
                   <div className="text-sm text-gray-500 mt-1">{stat.description}</div>
                 </Card>
@@ -208,20 +213,30 @@ export default function BuyerDashboard() {
               </Link>
             </div>
             
-            {recentOrders.length === 0 ? (
-              <div className="text-center py-8">
-                <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500 mb-4">No orders yet</p>
-                <Link to="/buyer/shop">
-                  <Button className="bg-[#BE220E] hover:bg-[#9a1b0b]">
-                    Start Shopping
-                  </Button>
-                </Link>
+            {ordersLoading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                    <Skeleton className="w-16 h-16 rounded-lg flex-shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-3/4 rounded" />
+                      <Skeleton className="h-3 w-1/2 rounded" />
+                    </div>
+                    <Skeleton className="h-8 w-20 rounded" />
+                  </div>
+                ))}
               </div>
+            ) : recentOrders.length === 0 ? (
+              <EmptyState
+                icon={Package}
+                title="No orders yet"
+                description="Start shopping to see your orders here"
+                action={{ label: 'Start Shopping', onClick: () => navigate('/buyer/shop') }}
+              />
             ) : (
               <div className="space-y-3">
                 {recentOrders.map((order) => (
-                  <Link key={order.id} to={`/buyer/order-tracking/${order.id}`}>
+                  <Link key={order.id} to={`/buyer/track-order/${order.id}`}>
                     <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer">
                       <div className="w-16 h-16 bg-gray-200 rounded-lg flex-shrink-0 overflow-hidden">
                         {order.items?.[0]?.image && (
@@ -293,16 +308,26 @@ export default function BuyerDashboard() {
             </Link>
           </div>
 
-          {recommendedProducts.length === 0 ? (
-            <div className="text-center py-8">
-              <ShoppingBag className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500 mb-4">No recommendations yet</p>
-              <Link to="/buyer/shop">
-                <Button className="bg-[#BE220E] hover:bg-[#9a1b0b]">
-                  Explore Products
-                </Button>
-              </Link>
+          {productsLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="overflow-hidden rounded-lg border">
+                  <Skeleton className="h-48 w-full" />
+                  <div className="p-4 space-y-2">
+                    <Skeleton className="h-4 w-3/4 rounded" />
+                    <Skeleton className="h-4 w-1/2 rounded" />
+                    <Skeleton className="h-9 w-full rounded" />
+                  </div>
+                </div>
+              ))}
             </div>
+          ) : recommendedProducts.length === 0 ? (
+            <EmptyState
+              icon={ShoppingBag}
+              title="No recommendations yet"
+              description="Browse the shop to discover products you'll love"
+              action={{ label: 'Explore Products', onClick: () => navigate('/buyer/shop') }}
+            />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {recommendedProducts.map((product) => (

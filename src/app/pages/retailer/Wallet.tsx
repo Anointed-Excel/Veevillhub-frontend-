@@ -7,6 +7,7 @@ import { Label } from '@/app/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Wallet, Download, Plus, Minus, TrendingUp, TrendingDown, Calendar, Search, Filter, DollarSign, CreditCard } from 'lucide-react';
+import EmptyState from '@/app/components/EmptyState';
 import { toast } from 'sonner';
 
 interface Transaction {
@@ -419,11 +420,12 @@ export default function RetailerWallet() {
               </div>
 
               {filteredTransactions.length === 0 && (
-                <div className="text-center py-12">
-                  <Wallet className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-xl font-bold mb-2">No transactions found</h3>
-                  <p className="text-gray-600">Try adjusting your filters</p>
-                </div>
+                <EmptyState
+                  icon={Wallet}
+                  title={searchQuery || filterType !== 'all' || filterCategory !== 'all' ? 'No transactions match your filters' : 'No transactions yet'}
+                  description={searchQuery || filterType !== 'all' || filterCategory !== 'all' ? 'Try adjusting your search or filters.' : 'Your earnings and withdrawals will appear here.'}
+                  action={searchQuery || filterType !== 'all' || filterCategory !== 'all' ? { label: 'Clear Filters', onClick: () => { setSearchQuery(''); setFilterType('all'); setFilterCategory('all'); } } : undefined}
+                />
               )}
             </Card>
           </div>

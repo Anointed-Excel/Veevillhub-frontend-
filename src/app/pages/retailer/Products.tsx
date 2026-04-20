@@ -8,6 +8,7 @@ import { Textarea } from '@/app/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Plus, Search, Download, Eye, Edit2, Trash2, Package, AlertCircle, TrendingUp } from 'lucide-react';
+import EmptyState from '@/app/components/EmptyState';
 import { toast } from 'sonner';
 
 interface Product {
@@ -484,24 +485,16 @@ export default function RetailerProducts() {
         </div>
 
         {filteredProducts.length === 0 && (
-          <Card className="p-12">
-            <div className="text-center">
-              <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-bold mb-2">No products found</h3>
-              <p className="text-gray-600 mb-4">Try adjusting your filters or add your first product</p>
-              <Button 
-                style={{ backgroundColor: '#BE220E' }} 
-                className="text-white"
-                onClick={() => {
-                  resetForm();
-                  setShowCreateModal(true);
-                }}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Product
-              </Button>
-            </div>
-          </Card>
+          <EmptyState
+            icon={Package}
+            title={searchQuery || filterCategory !== 'all' || filterStatus !== 'all' ? 'No products match your filters' : 'No products yet'}
+            description={searchQuery || filterCategory !== 'all' || filterStatus !== 'all' ? 'Try adjusting your search or filters.' : 'Add your first product to start selling.'}
+            action={
+              searchQuery || filterCategory !== 'all' || filterStatus !== 'all'
+                ? { label: 'Clear Filters', onClick: () => { setSearchQuery(''); setFilterCategory('all'); setFilterStatus('all'); } }
+                : { label: 'Add Product', onClick: () => { resetForm(); setShowCreateModal(true); } }
+            }
+          />
         )}
       </div>
 

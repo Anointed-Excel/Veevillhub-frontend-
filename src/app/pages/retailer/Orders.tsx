@@ -8,6 +8,7 @@ import { Textarea } from '@/app/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Search, Eye, Download, Package, Truck, CheckCircle, XCircle, Clock, Filter, MapPin, Phone, Mail } from 'lucide-react';
+import EmptyState from '@/app/components/EmptyState';
 import { toast } from 'sonner';
 
 interface Order {
@@ -450,13 +451,12 @@ export default function RetailerOrders() {
         </div>
 
         {filteredOrders.length === 0 && (
-          <Card className="p-12">
-            <div className="text-center">
-              <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-bold mb-2">No orders found</h3>
-              <p className="text-gray-600">Try adjusting your filters</p>
-            </div>
-          </Card>
+          <EmptyState
+            icon={Package}
+            title={searchQuery || filterStatus !== 'all' || filterPayment !== 'all' ? 'No orders match your filters' : 'No orders yet'}
+            description={searchQuery || filterStatus !== 'all' || filterPayment !== 'all' ? 'Try adjusting your search or filters.' : 'Your orders will appear here once buyers place them.'}
+            action={searchQuery || filterStatus !== 'all' || filterPayment !== 'all' ? { label: 'Clear Filters', onClick: () => { setSearchQuery(''); setFilterStatus('all'); setFilterPayment('all'); } } : undefined}
+          />
         )}
       </div>
 

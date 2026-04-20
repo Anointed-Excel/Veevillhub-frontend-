@@ -7,6 +7,8 @@ import { Label } from '@/app/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Plus, Search, Download, Eye, Edit2, Trash2, Package, AlertCircle } from 'lucide-react';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import EmptyState from '@/app/components/EmptyState';
 import { toast } from 'sonner';
 
 interface Product {
@@ -259,6 +261,18 @@ export default function ManufacturerProducts() {
         </div>
 
         {/* Products Grid */}
+        {filteredProducts.length === 0 ? (
+          <EmptyState
+            icon={Package}
+            title={searchQuery || filterCategory !== 'all' || filterStatus !== 'all' ? 'No products match your filters' : 'No products yet'}
+            description={searchQuery || filterCategory !== 'all' || filterStatus !== 'all' ? 'Try adjusting your search or filters.' : 'Add your first product to start selling.'}
+            action={
+              searchQuery || filterCategory !== 'all' || filterStatus !== 'all'
+                ? { label: 'Clear Filters', onClick: () => { setSearchQuery(''); setFilterCategory('all'); setFilterStatus('all'); } }
+                : { label: 'Add Product', onClick: () => setShowCreateModal(true) }
+            }
+          />
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProducts.map((product) => (
             <Card key={product.id} className="overflow-hidden hover:shadow-lg transition">
@@ -325,6 +339,7 @@ export default function ManufacturerProducts() {
             </Card>
           ))}
         </div>
+        )}
 
         {/* Create Modal */}
         <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>

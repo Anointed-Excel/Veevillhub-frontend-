@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Download, Eye, Trash2, Ban, CheckCircle, ShoppingBag, Mail, Phone, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import EmptyState from '@/app/components/EmptyState';
 
 interface Buyer {
   id: string;
@@ -226,7 +228,30 @@ export default function BrandBuyers() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredBuyers.map((buyer) => (
+                {loading ? (
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-full rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-full rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-16 rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-24 rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-20 rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-24 rounded" /></td>
+                    </tr>
+                  ))
+                ) : filteredBuyers.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-2">
+                      <EmptyState
+                        icon={ShoppingBag}
+                        title={searchQuery || filterStatus !== 'all' ? 'No buyers match your filters' : 'No buyers yet'}
+                        description={searchQuery || filterStatus !== 'all' ? 'Try adjusting your search or status filter.' : 'Buyers will appear here once they register.'}
+                        action={searchQuery || filterStatus !== 'all' ? { label: 'Clear Filters', onClick: () => { setSearchQuery(''); setFilterStatus('all'); } } : undefined}
+                      />
+                    </td>
+                  </tr>
+                ) : filteredBuyers.map((buyer) => (
                   <tr key={buyer.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
                       <div className="flex items-center">

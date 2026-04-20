@@ -26,6 +26,8 @@ import {
   Bell,
   Loader2,
 } from 'lucide-react';
+import EmptyState from '@/app/components/EmptyState';
+import { Skeleton } from '@/app/components/ui/skeleton';
 import { useState, useEffect, useCallback } from 'react';
 
 interface Product {
@@ -482,21 +484,29 @@ export default function BuyerHome() {
         </div>
 
         {loading && products.length === 0 ? (
-          <div className="flex justify-center py-20">
-            <Loader2 className="w-10 h-10 animate-spin text-[#BE220E]" />
+          <div className={
+            viewMode === 'grid'
+              ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'
+              : 'space-y-4'
+          }>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Card key={i} className="overflow-hidden">
+                <Skeleton className="h-48 w-full" />
+                <div className="p-4 space-y-2">
+                  <Skeleton className="h-4 w-3/4 rounded" />
+                  <Skeleton className="h-4 w-1/2 rounded" />
+                  <Skeleton className="h-9 w-full rounded" />
+                </div>
+              </Card>
+            ))}
           </div>
         ) : !loading && products.length === 0 ? (
-          <Card className="p-12 text-center">
-            <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No products found</h3>
-            <p className="text-gray-600 mb-4">Try adjusting your filters or search query</p>
-            <Button
-              onClick={() => { setSearchQuery(''); setSelectedCategory('all'); setPriceRange([0, 0]); }}
-              className="bg-[#BE220E] hover:bg-[#9a1b0b]"
-            >
-              Clear All Filters
-            </Button>
-          </Card>
+          <EmptyState
+            icon={Package}
+            title="No products found"
+            description="Try adjusting your filters or search query"
+            action={{ label: 'Clear All Filters', onClick: () => { setSearchQuery(''); setSelectedCategory('all'); setPriceRange([0, 0]); } }}
+          />
         ) : (
           <div className={
             viewMode === 'grid'

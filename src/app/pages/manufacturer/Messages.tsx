@@ -4,6 +4,7 @@ import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { MessageCircle, Send, Search, User } from 'lucide-react';
+import EmptyState from '@/app/components/EmptyState';
 
 interface Message {
   id: string;
@@ -104,7 +105,14 @@ export default function ManufacturerMessages() {
               </div>
             </div>
             <div className="space-y-2">
-              {filteredThreads.map((thread) => (
+              {filteredThreads.length === 0 ? (
+                <EmptyState
+                  icon={MessageCircle}
+                  title={searchQuery ? 'No conversations found' : 'No messages yet'}
+                  description={searchQuery ? 'Try a different search term' : 'Your conversations will appear here'}
+                  action={searchQuery ? { label: 'Clear Search', onClick: () => setSearchQuery('') } : undefined}
+                />
+              ) : filteredThreads.map((thread) => (
                 <div
                   key={thread.id}
                   onClick={() => setSelectedThread(thread.id)}

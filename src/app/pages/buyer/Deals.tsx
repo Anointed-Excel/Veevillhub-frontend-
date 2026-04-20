@@ -19,6 +19,8 @@ import { Link } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
 import { api } from '@/lib/api';
 import { useState, useEffect } from 'react';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import EmptyState from '@/app/components/EmptyState';
 
 interface Product {
   id: string;
@@ -34,6 +36,7 @@ export default function BuyerDeals() {
   const { addToCart, addToWishlist } = useCart();
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDealType, setSelectedDealType] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
@@ -49,13 +52,13 @@ export default function BuyerDeals() {
       clearance: 30 * 24 * 60 * 60 * 1000,
     };
 
-    api.get<unknown>('/shop/products?limit=100').then((res) => {
+    api.get<unknown>('/shop/products?onSale=true&limit=50').then((res) => {
       const data = res.data as Record<string, unknown>;
       const raw = (data.products || []) as Record<string, unknown>[];
       const now = new Date();
 
       const deals: Product[] = raw
-        .filter((p) => p.sales_price && Number(p.sales_price) > 0 && Number(p.sales_price) < Number(p.regular_price))
+        .filter((p) => Number(p.sales_price) < Number(p.regular_price))
         .map((p) => {
           const regularPrice = Number(p.regular_price) || 0;
           const salesPrice = Number(p.sales_price) || 0;
@@ -78,7 +81,7 @@ export default function BuyerDeals() {
 
       setProducts(deals);
       setFilteredProducts(deals);
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   // Tick every second so countdown timers stay live
@@ -315,23 +318,26 @@ export default function BuyerDeals() {
         )}
 
         {/* Products Grid */}
-        {filteredProducts.length === 0 ? (
-          <Card className="p-12 text-center">
-            <Gift className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No deals found</h3>
-            <p className="text-gray-600 mb-4">
-              Try adjusting your filters or check back later for new deals
-            </p>
-            <Button
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedDealType('all');
-              }}
-              className="bg-[#BE220E] hover:bg-[#9a1b0b]"
-            >
-              Clear Filters
-            </Button>
-          </Card>
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Card key={i} className="overflow-hidden">
+                <Skeleton className="h-48 w-full" />
+                <div className="p-3 space-y-2">
+                  <Skeleton className="h-4 w-3/4 rounded" />
+                  <Skeleton className="h-5 w-1/3 rounded" />
+                  <Skeleton className="h-8 w-full rounded mt-2" />
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <EmptyState
+            icon={Gift}
+            title={searchQuery || selectedDealType !== 'all' ? 'No deals match your filters' : 'No deals available right now'}
+            description={searchQuery || selectedDealType !== 'all' ? 'Try adjusting your search or deal type filter.' : 'Check back later for flash sales and special offers.'}
+            action={searchQuery || selectedDealType !== 'all' ? { label: 'Clear Filters', onClick: () => { setSearchQuery(''); setSelectedDealType('all'); } } : undefined}
+          />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredProducts.map((product) => {

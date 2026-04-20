@@ -7,6 +7,8 @@ import { Label } from '@/app/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Search, Download, Eye, Edit2, Package, Truck, CheckCircle, Clock } from 'lucide-react';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import EmptyState from '@/app/components/EmptyState';
 import { toast } from 'sonner';
 
 interface Order {
@@ -243,7 +245,18 @@ export default function ManufacturerOrders() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredOrders.map((order) => (
+                {filteredOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-2">
+                      <EmptyState
+                        icon={Package}
+                        title={searchQuery || filterStatus !== 'all' || filterPayment !== 'all' ? 'No orders match your filters' : 'No orders yet'}
+                        description={searchQuery || filterStatus !== 'all' || filterPayment !== 'all' ? 'Try adjusting your search or filters.' : 'Your orders will appear here once buyers place them.'}
+                        action={searchQuery || filterStatus !== 'all' || filterPayment !== 'all' ? { label: 'Clear Filters', onClick: () => { setSearchQuery(''); setFilterStatus('all'); setFilterPayment('all'); } } : undefined}
+                      />
+                    </td>
+                  </tr>
+                ) : filteredOrders.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
                       <div className="font-medium">{order.orderNumber}</div>

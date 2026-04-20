@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
+import EmptyState from '@/app/components/EmptyState';
 import {
   ArrowLeft,
   ShoppingCart,
@@ -74,18 +75,12 @@ export default function Cart() {
 
         {/* Empty State */}
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center px-4">
-            <ShoppingCart className="w-24 h-24 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold mb-2">Your cart is empty</h2>
-            <p className="text-gray-600 mb-6">
-              Add some products to get started
-            </p>
-            <Link to="/buyer">
-              <Button className="bg-[#BE220E] hover:bg-[#9a1b0b]">
-                Start Shopping
-              </Button>
-            </Link>
-          </div>
+          <EmptyState
+            icon={ShoppingCart}
+            title="Your cart is empty"
+            description="Add items from the shop to get started."
+            action={{ label: 'Shop Now', onClick: () => navigate('/buyer/shop') }}
+          />
         </div>
       </div>
     );

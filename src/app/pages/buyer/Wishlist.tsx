@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
+import EmptyState from '@/app/components/EmptyState';
 import {
   ArrowLeft,
   Heart,
@@ -62,18 +63,12 @@ export default function Wishlist() {
 
         {/* Empty State */}
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center px-4">
-            <Heart className="w-24 h-24 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold mb-2">Your wishlist is empty</h2>
-            <p className="text-gray-600 mb-6">
-              Save items you like to your wishlist
-            </p>
-            <Link to="/buyer">
-              <Button className="bg-[#BE220E] hover:bg-[#9a1b0b]">
-                Start Shopping
-              </Button>
-            </Link>
-          </div>
+          <EmptyState
+            icon={Heart}
+            title="Your wishlist is empty"
+            description="Save items you love and find them here later."
+            action={{ label: 'Browse Products', onClick: () => navigate('/buyer/shop') }}
+          />
         </div>
       </div>
     );

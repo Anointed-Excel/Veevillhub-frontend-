@@ -13,6 +13,8 @@ import {
 import { Plus, Search, Download, Eye, Edit2, Trash2, Ban, CheckCircle, Shield, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import EmptyState from '@/app/components/EmptyState';
 
 interface Admin {
   id: string;
@@ -183,26 +185,44 @@ export default function BrandUsers() {
 
         {/* Table */}
         <Card>
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admin</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Login</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-full rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-24 rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-32 rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-24 rounded" /></td>
+                    </tr>
+                  ))
+                ) : filteredAdmins.length === 0 ? (
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admin</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Login</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    <td colSpan={5} className="py-2">
+                      <EmptyState
+                        icon={Shield}
+                        title={searchQuery || filterStatus !== 'all' || filterRole !== 'all' ? 'No admins match your filters' : 'No admins yet'}
+                        description={searchQuery || filterStatus !== 'all' || filterRole !== 'all' ? 'Try adjusting your search or filters.' : 'Add your first admin user to manage the platform.'}
+                        action={
+                          searchQuery || filterStatus !== 'all' || filterRole !== 'all'
+                            ? { label: 'Clear Filters', onClick: () => { setSearchQuery(''); setFilterStatus('all'); setFilterRole('all'); } }
+                            : { label: 'Add Admin', onClick: () => setShowCreateModal(true) }
+                        }
+                      />
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredAdmins.length === 0 ? (
-                    <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">No admins found</td></tr>
-                  ) : filteredAdmins.map((admin) => (
+                ) : filteredAdmins.map((admin) => (
                     <tr key={admin.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -239,10 +259,9 @@ export default function BrandUsers() {
                       </td>
                     </tr>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+              </tbody>
+            </table>
+          </div>
         </Card>
 
         {/* Create Modal */}

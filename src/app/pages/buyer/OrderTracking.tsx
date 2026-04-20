@@ -15,6 +15,8 @@ import {
   Home,
   Calendar,
 } from 'lucide-react';
+import EmptyState from '@/app/components/EmptyState';
+import { Skeleton } from '@/app/components/ui/skeleton';
 import { toast } from 'sonner';
 import { copyToClipboard } from '@/utils/clipboard';
 
@@ -61,6 +63,7 @@ export default function OrderTracking() {
   const navigate = useNavigate();
   const [order, setOrder] = useState<Order | null>(null);
   const [trackingSteps, setTrackingSteps] = useState<TrackingStep[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) return;
@@ -109,7 +112,7 @@ export default function OrderTracking() {
 
       setOrder(mapped);
       setTrackingSteps(generateTrackingSteps(mapped));
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setLoading(false));
   }, [id]);
 
   const generateTrackingSteps = (order: Order): TrackingStep[] => {
@@ -193,19 +196,36 @@ export default function OrderTracking() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 pb-8">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="px-4 py-3 flex items-center gap-2">
+            <Skeleton className="w-10 h-10 rounded-lg" />
+            <Skeleton className="w-32 h-6 rounded" />
+          </div>
+        </header>
+        <div className="max-w-5xl mx-auto p-4 space-y-6">
+          <Skeleton className="h-48 w-full rounded-xl" />
+          <Skeleton className="h-64 w-full rounded-xl" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Skeleton className="h-64 w-full rounded-xl" />
+            <Skeleton className="h-64 w-full rounded-xl" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!order) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Package className="w-24 h-24 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-2">Order not found</h2>
-          <p className="text-gray-600 mb-6">
-            The order you're looking for doesn't exist or you don't have access to it.
-          </p>
-          <Link to="/buyer/orders">
-            <Button className="bg-[#BE220E] hover:bg-[#9a1b0b]">View My Orders</Button>
-          </Link>
-        </div>
+        <EmptyState
+          icon={Package}
+          title="Order not found"
+          description="The order you're looking for doesn't exist or you don't have access to it."
+          action={{ label: 'View My Orders', onClick: () => navigate('/buyer/orders') }}
+        />
       </div>
     );
   }

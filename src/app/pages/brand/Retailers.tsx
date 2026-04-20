@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Download, Eye, Trash2, Ban, CheckCircle, Store, Users, FileText, MapPin, Calendar, IdCard, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import EmptyState from '@/app/components/EmptyState';
 
 interface BusinessProfile {
   company_name: string | null;
@@ -204,25 +206,42 @@ export default function BrandRetailers() {
 
         {/* Table */}
         <Card>
-          {loading ? (
-            <div className="flex justify-center py-16">
-              <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Business</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Performance</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Revenue</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {loading ? (
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-full rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-full rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-full rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-24 rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-24 rounded" /></td>
+                    </tr>
+                  ))
+                ) : filteredRetailers.length === 0 ? (
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Business</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Performance</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Revenue</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    <td colSpan={6} className="py-2">
+                      <EmptyState
+                        icon={Store}
+                        title={searchQuery || filterStatus !== 'all' ? 'No retailers match your filters' : 'No retailers yet'}
+                        description={searchQuery || filterStatus !== 'all' ? 'Try adjusting your search or status filter.' : 'Retailers will appear here once they register.'}
+                        action={searchQuery || filterStatus !== 'all' ? { label: 'Clear Filters', onClick: () => { setSearchQuery(''); setFilterStatus('all'); } } : undefined}
+                      />
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredRetailers.map((retailer) => (
+                ) : filteredRetailers.map((retailer) => (
                     <tr key={retailer.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
                         <div className="flex items-center">
@@ -289,17 +308,9 @@ export default function BrandRetailers() {
                       </td>
                     </tr>
                   ))}
-                  {filteredRetailers.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                        No retailers found
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
+              </tbody>
+            </table>
+          </div>
         </Card>
 
         {/* View Modal */}

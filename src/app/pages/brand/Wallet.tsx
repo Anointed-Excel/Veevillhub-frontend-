@@ -5,6 +5,8 @@ import { Button } from '@/app/components/ui/button';
 import { DollarSign, TrendingUp, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import EmptyState from '@/app/components/EmptyState';
 
 interface Transaction {
   id: string;
@@ -46,9 +48,30 @@ export default function BrandWallet() {
         <h1 className="text-3xl font-bold">Wallet</h1>
 
         {loading ? (
-          <div className="flex justify-center py-24">
-            <Loader2 className="w-10 h-10 animate-spin text-gray-400" />
-          </div>
+          <>
+            <Skeleton className="h-52 w-full rounded-xl" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Card key={i} className="p-4">
+                  <Skeleton className="h-4 w-1/2 rounded mb-2" />
+                  <Skeleton className="h-8 w-3/4 rounded" />
+                </Card>
+              ))}
+            </div>
+            <Card className="p-6">
+              <Skeleton className="h-6 w-48 rounded mb-4" />
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 pb-4 mb-4 border-b last:border-0">
+                  <Skeleton className="h-10 w-10 rounded-full flex-shrink-0" />
+                  <div className="flex-1 space-y-1">
+                    <Skeleton className="h-4 w-1/2 rounded" />
+                    <Skeleton className="h-3 w-1/3 rounded" />
+                  </div>
+                  <Skeleton className="h-5 w-20 rounded" />
+                </div>
+              ))}
+            </Card>
+          </>
         ) : (
           <>
             {/* Balance Card */}
@@ -136,7 +159,11 @@ export default function BrandWallet() {
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-500 text-sm py-4">No transactions yet.</p>
+                <EmptyState
+                  icon={DollarSign}
+                  title="No transactions yet"
+                  description="Platform revenue from delivered orders will appear here."
+                />
               )}
             </Card>
           </>

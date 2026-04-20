@@ -43,7 +43,9 @@ interface BackendUser {
   full_name: string;
   email: string;
   phone_number?: string;
+  user_type?: 'buyer' | 'manufacturer' | 'retailer';
   is_verified?: boolean;
+  is_active?: boolean;
   status?: string;
 }
 
@@ -59,12 +61,29 @@ interface BackendAdmin {
 // ── Normalizers ───────────────────────────────────────────────────────────────
 
 function normalizeUser(u: BackendUser): User {
+  // Map backend user_type to frontend role (default to buyer for legacy records)
+  const roleMap: Record<string, UserRole> = {
+    buyer: 'buyer',
+    manufacturer: 'manufacturer',
+    retailer: 'retailer',
+  };
+  const role: UserRole = roleMap[u.user_type ?? 'buyer'] ?? 'buyer';
+
+  // Derive verification status from account status fields
+  // Suspended → rejected, inactive/not_active → pending, otherwise approved
+  let verificationStatus: VerificationStatus = 'approved';
+  if (u.status === 'suspended') {
+    verificationStatus = 'rejected';
+  } else if (!u.is_active || u.status === 'inactive') {
+    verificationStatus = 'pending';
+  }
+
   return {
     id: u.id,
     email: u.email,
     name: u.full_name,
-    role: 'buyer',
-    verificationStatus: 'approved',
+    role,
+    verificationStatus,
     avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(u.full_name)}&background=BE220E&color=fff`,
   };
 }
@@ -140,16 +159,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signup = async (data: SignupData) => {
-    // Only buyer self-registration is supported via API
-    if (data.role !== 'buyer') {
-      throw new Error('Only buyer accounts can self-register');
-    }
-
     await api.post('/users/register', {
-      full_name: data.name,
+      fullName: data.name,
       email: data.email,
-      phone_number: data.phone ?? '',
+      phoneNumber: data.phone ?? '',
       password: data.password,
+      confirmPassword: data.password,
+      userType: data.role === 'brand' ? 'buyer' : data.role,
     });
     // Registration triggers an OTP email — caller handles next step
   };

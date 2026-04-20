@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Download, Eye, Edit2, RefreshCw, Package, Truck, CheckCircle, XCircle, Clock, DollarSign, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import EmptyState from '@/app/components/EmptyState';
 
 interface Order {
   id: string;
@@ -375,7 +377,31 @@ export default function BrandOrders() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredOrders.map((order) => (
+                {loading ? (
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-full rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-full rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-full rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-24 rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-20 rounded" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-6 w-24 rounded-full" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                      <td className="px-6 py-4"><Skeleton className="h-4 w-24 rounded" /></td>
+                    </tr>
+                  ))
+                ) : filteredOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-2">
+                      <EmptyState
+                        icon={Package}
+                        title={searchQuery || filterStatus !== 'all' || filterPayment !== 'all' || filterSeller !== 'all' ? 'No orders match your filters' : 'No orders yet'}
+                        description={searchQuery || filterStatus !== 'all' || filterPayment !== 'all' || filterSeller !== 'all' ? 'Try adjusting your search or filters.' : 'Orders will appear here once buyers start purchasing.'}
+                        action={searchQuery || filterStatus !== 'all' || filterPayment !== 'all' || filterSeller !== 'all' ? { label: 'Clear Filters', onClick: () => { setSearchQuery(''); setFilterStatus('all'); setFilterPayment('all'); setFilterSeller('all'); } } : undefined}
+                      />
+                    </td>
+                  </tr>
+                ) : filteredOrders.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
                       <div className="font-medium">{order.orderNumber}</div>

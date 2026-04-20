@@ -19,6 +19,8 @@ import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { toast } from 'sonner';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import EmptyState from '@/app/components/EmptyState';
 
 interface Notification {
   id: string;
@@ -34,9 +36,11 @@ interface Notification {
 
 export default function BuyerNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
 
   const loadNotifications = () => {
+    setLoading(true);
     api.get<unknown>('/notifications').then((res) => {
       const data = res.data as Record<string, unknown>;
       const raw = (data.notifications || res.data) as Record<string, unknown>[];
@@ -52,7 +56,7 @@ export default function BuyerNotifications() {
           actionText: (n.action_text as string) || undefined,
         })));
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setLoading(false));
   };
 
   useEffect(() => { loadNotifications(); }, []);
@@ -241,22 +245,28 @@ export default function BuyerNotifications() {
         </div>
 
         {/* Notifications List */}
-        {filteredNotifications.length === 0 ? (
-          <Card className="p-12 text-center">
-            <Bell className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No notifications</h3>
-            <p className="text-gray-600 mb-4">
-              {filter === 'unread'
-                ? "You're all caught up! No unread notifications."
-                : "You don't have any notifications yet."}
-            </p>
-            <Link to="/buyer/shop">
-              <Button className="bg-[#BE220E] hover:bg-[#9a1b0b]">
-                <ShoppingCart className="w-4 h-4 mr-2" />
-                Start Shopping
-              </Button>
-            </Link>
-          </Card>
+        {loading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Card key={i} className="p-4">
+                <div className="flex items-start gap-3">
+                  <Skeleton className="h-10 w-10 rounded-full flex-shrink-0" />
+                  <div className="flex-1 space-y-1">
+                    <Skeleton className="h-4 w-1/2 rounded" />
+                    <Skeleton className="h-3 w-3/4 rounded" />
+                    <Skeleton className="h-3 w-1/4 rounded" />
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : filteredNotifications.length === 0 ? (
+          <EmptyState
+            icon={Bell}
+            title={filter === 'unread' ? "You're all caught up!" : 'No notifications yet'}
+            description={filter === 'unread' ? 'No unread notifications.' : 'Notifications about your orders and deals will appear here.'}
+            action={filter !== 'all' ? { label: 'Show All', onClick: () => setFilter('all') } : undefined}
+          />
         ) : (
           <div className="space-y-3">
             {filteredNotifications.map((notification) => {
