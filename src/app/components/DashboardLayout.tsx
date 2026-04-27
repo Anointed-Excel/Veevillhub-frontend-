@@ -23,9 +23,12 @@ import {
   Bell,
   Home,
   Zap,
+  Layers,
+  RotateCcw,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useCart } from '@/contexts/CartContext';
+import { useCurrency, SUPPORTED_CURRENCIES } from '@/contexts/CurrencyContext';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -42,6 +45,7 @@ export default function DashboardLayout({ children, role }: DashboardLayoutProps
   const cartContext = role === 'buyer' ? useCart() : null;
   const cartCount = cartContext?.cartCount || 0;
   const wishlistCount = cartContext?.wishlistCount || 0;
+  const { code: currencyCode, symbol: currencySymbol, loading: currencyLoading, setCurrency } = useCurrency();
 
   const getNavItems = () => {
     switch (role) {
@@ -53,8 +57,11 @@ export default function DashboardLayout({ children, role }: DashboardLayoutProps
           { icon: Store, label: 'Retailers', path: '/brand/retailers' },
           { icon: ShoppingBag, label: 'Buyers', path: '/brand/buyers' },
           { icon: Package, label: 'Products', path: '/brand/products' },
+          { icon: Layers, label: 'Categories', path: '/brand/categories' },
           { icon: ShoppingCart, label: 'Orders', path: '/brand/orders' },
           { icon: Tag, label: 'Promotions', path: '/brand/promotions' },
+          { icon: Package, label: 'My Products', path: '/brand/my-products' },
+          { icon: RotateCcw, label: 'Refunds', path: '/brand/refunds' },
           { icon: DollarSign, label: 'Wallet', path: '/brand/wallet' },
           { icon: BarChart3, label: 'Analytics', path: '/brand/analytics' },
           { icon: Settings, label: 'Settings', path: '/brand/settings' },
@@ -157,6 +164,24 @@ export default function DashboardLayout({ children, role }: DashboardLayoutProps
 
         {/* User section */}
         <div className="p-4 border-t border-gray-200">
+          {/* Currency selector — buyer only */}
+          {role === 'buyer' && (
+            <div className="mb-3">
+              <div className="text-xs text-gray-500 mb-1 px-1">Currency</div>
+              <select
+                value={currencyCode}
+                onChange={(e) => setCurrency(e.target.value)}
+                disabled={currencyLoading}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#BE220E]/30"
+              >
+                {SUPPORTED_CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.symbol} {c.code} — {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-gray-50">
             <div className="w-10 h-10 rounded-full bg-[#BE220E] text-white flex items-center justify-center font-medium">
               {user?.name.charAt(0)}

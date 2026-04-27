@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import EmptyState from '@/app/components/EmptyState';
@@ -18,6 +19,7 @@ import { toast } from 'sonner';
 export default function Wishlist() {
   const navigate = useNavigate();
   const { wishlistItems, removeFromWishlist, moveToCart, cartCount, wishlistCount } = useCart();
+  const { fmt } = useCurrency();
 
   const handleMoveToCart = (itemId: string) => {
     moveToCart(itemId);
@@ -130,7 +132,7 @@ export default function Wishlist() {
                 </Link>
 
                 <p className="text-xl font-bold text-[#BE220E] mb-3">
-                  ₦{item.price.toLocaleString()}
+                  {fmt(item.price)}
                 </p>
 
                 <div className="flex gap-2">

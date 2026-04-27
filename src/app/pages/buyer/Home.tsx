@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { api } from '@/lib/api';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
@@ -71,10 +72,13 @@ export default function BuyerHome() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { cartCount, wishlistCount, addToCart, addToWishlist } = useCart();
+  const { fmt } = useCurrency();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [flashDeals, setFlashDeals] = useState<Product[]>([]);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [bestSellers, setBestSellers] = useState<Product[]>([]);
+  const [recentlyViewed, setRecentlyViewed] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ApiCategory[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -87,12 +91,30 @@ export default function BuyerHome() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [totalResults, setTotalResults] = useState(0);
 
-  // Fetch categories once on mount
+  // Fetch categories + featured + best sellers once on mount
   useEffect(() => {
     api.get<unknown>('/shop/categories').then((res) => {
       const data = res.data as Record<string, unknown>;
       const raw = (data.categories || []) as Record<string, unknown>[];
       setCategories(raw.map((c) => ({ id: c.id as string, name: c.name as string })));
+    }).catch(() => {});
+
+    api.get<unknown>('/shop/featured-products').then((res) => {
+      const data = res.data as Record<string, unknown>;
+      const raw = (data.products || data.featured || []) as Record<string, unknown>[];
+      setFeaturedProducts(raw.map(mapProduct).slice(0, 6));
+    }).catch(() => {});
+
+    api.get<unknown>('/shop/best-sellers').then((res) => {
+      const data = res.data as Record<string, unknown>;
+      const raw = (data.products || data.bestSellers || []) as Record<string, unknown>[];
+      setBestSellers(raw.map(mapProduct).slice(0, 6));
+    }).catch(() => {});
+
+    api.get<unknown>('/shop/recently-viewed').then((res) => {
+      const data = res.data as Record<string, unknown>;
+      const raw = (data.products || data.items || []) as Record<string, unknown>[];
+      setRecentlyViewed(raw.map(mapProduct).slice(0, 6));
     }).catch(() => {});
   }, []);
 
@@ -122,13 +144,11 @@ export default function BuyerHome() {
       setProducts(mapped);
       setTotalResults(res.pagination?.totalResults || mapped.length);
 
-      // Flash deals and featured only when showing default view
+      // Flash deals only when showing default view
       if (!searchQuery && selectedCategory === 'all') {
         setFlashDeals(mapped.filter((p) => p.discount > 0).slice(0, 6));
-        setFeaturedProducts(mapped.slice(0, 4));
       } else {
         setFlashDeals([]);
-        setFeaturedProducts([]);
       }
     }).catch(() => {}).finally(() => setLoading(false));
   }, [searchQuery, selectedCategory, priceRange, sortBy]);
@@ -172,15 +192,15 @@ export default function BuyerHome() {
           {product.discount > 0 ? (
             <>
               <span className="text-xl font-bold text-[#BE220E]">
-                ₦{Math.round(product.price * (1 - product.discount / 100)).toLocaleString()}
+                {fmt(Math.round(product.price * (1 - product.discount / 100)))}
               </span>
               <span className="text-sm text-gray-500 line-through">
-                ₦{product.price.toLocaleString()}
+                {fmt(product.price)}
               </span>
             </>
           ) : (
             <span className="text-xl font-bold text-[#BE220E]">
-              ₦{product.price.toLocaleString()}
+              {fmt(product.price)}
             </span>
           )}
         </div>
@@ -394,7 +414,7 @@ export default function BuyerHome() {
         )}
 
         {/* Featured Products */}
-        {!loading && featuredProducts.length > 0 && (
+        {featuredProducts.length > 0 && (
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-4">
               <Star className="w-6 h-6 text-[#BE220E]" />
@@ -402,6 +422,36 @@ export default function BuyerHome() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {featuredProducts.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Best Sellers */}
+        {bestSellers.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp className="w-6 h-6 text-[#BE220E]" />
+              <h2 className="text-2xl font-bold">Best Sellers</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {bestSellers.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Recently Viewed */}
+        {recentlyViewed.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Clock className="w-6 h-6 text-[#BE220E]" />
+              <h2 className="text-2xl font-bold">Recently Viewed</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {recentlyViewed.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}
             </div>

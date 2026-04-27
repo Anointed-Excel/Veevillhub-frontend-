@@ -1,4 +1,5 @@
 import DashboardLayout from '@/app/components/DashboardLayout';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { Skeleton } from '@/app/components/ui/skeleton';
 import EmptyState from '@/app/components/EmptyState';
 import { Card } from '@/app/components/ui/card';
@@ -40,6 +41,7 @@ export default function BuyerDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { cartCount, wishlistCount, addToCart, addToWishlist } = useCart();
+  const { fmt } = useCurrency();
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [recommendedProducts, setRecommendedProducts] = useState<Product[]>([]);
   const [dashStats, setDashStats] = useState<{ totalOrders?: number; activeOrders?: number } | null>(null);
@@ -258,7 +260,7 @@ export default function BuyerDashboard() {
                       </div>
                       <div className="text-right">
                         <div className="font-bold text-[#BE220E]">
-                          ₦{order.total.toLocaleString()}
+                          {fmt(order.total)}
                         </div>
                         <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(order.status)}`}>
                           {order.status}
@@ -370,15 +372,15 @@ export default function BuyerDashboard() {
                       {product.discount > 0 ? (
                         <>
                           <span className="text-xl font-bold text-[#BE220E]">
-                            ₦{(product.price * (1 - product.discount / 100)).toLocaleString()}
+                            {fmt(product.price * (1 - product.discount / 100))}
                           </span>
                           <span className="text-sm text-gray-500 line-through">
-                            ₦{product.price.toLocaleString()}
+                            {fmt(product.price)}
                           </span>
                         </>
                       ) : (
                         <span className="text-xl font-bold text-[#BE220E]">
-                          ₦{product.price.toLocaleString()}
+                          {fmt(product.price)}
                         </span>
                       )}
                     </div>

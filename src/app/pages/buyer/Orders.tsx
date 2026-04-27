@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { api } from '@/lib/api';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
@@ -21,9 +22,13 @@ import {
   Heart,
   User,
   ShoppingCart,
+  RotateCcw,
+  Download,
+  Loader2,
 } from 'lucide-react';
 import { Skeleton } from '@/app/components/ui/skeleton';
 import EmptyState from '@/app/components/EmptyState';
+import { toast } from 'sonner';
 
 interface Order {
   id: string;
@@ -48,12 +53,17 @@ const statusConfig = {
 
 export default function BuyerOrders() {
   const { user } = useAuth();
+  const { fmt } = useCurrency();
   const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [returnOrder, setReturnOrder] = useState<Order | null>(null);
+  const [returnReason, setReturnReason] = useState('');
+  const [submittingReturn, setSubmittingReturn] = useState(false);
+  const [downloadingInvoice, setDownloadingInvoice] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -101,6 +111,46 @@ export default function BuyerOrders() {
   const getStatusCount = (status: string) => {
     if (status === 'all') return orders.length;
     return orders.filter((o) => o.status === status).length;
+  };
+
+  const handleReturnRequest = async () => {
+    if (!returnOrder || !returnReason.trim()) return;
+    setSubmittingReturn(true);
+    try {
+      await api.post('/returns', {
+        order_id: returnOrder.id,
+        reason: returnReason,
+        items: returnOrder.items.map((item) => ({
+          order_item_id: item.id,
+          quantity: item.quantity,
+        })),
+      });
+      toast.success('Return request submitted!');
+      setReturnOrder(null);
+      setReturnReason('');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to submit return request');
+    } finally {
+      setSubmittingReturn(false);
+    }
+  };
+
+  const handleDownloadInvoice = async (orderId: string) => {
+    setDownloadingInvoice(orderId);
+    try {
+      const res = await api.get<unknown>(`/orders/${orderId}/invoice`);
+      const data = res.data as Record<string, unknown>;
+      const url = (data.invoice_url as string) || (data.url as string);
+      if (url) {
+        window.open(url, '_blank');
+      } else {
+        toast.error('Invoice not available yet');
+      }
+    } catch {
+      toast.error('Could not download invoice');
+    } finally {
+      setDownloadingInvoice(null);
+    }
   };
 
   return (
@@ -275,7 +325,7 @@ export default function BuyerOrders() {
                           </Link>
                           <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
                           <p className="text-sm font-semibold text-[#BE220E]">
-                            ₦{(item.price * item.quantity).toLocaleString()}
+                            {fmt(item.price * item.quantity)}
                           </p>
                         </div>
                       </div>
@@ -292,11 +342,11 @@ export default function BuyerOrders() {
                     <div>
                       <p className="text-sm text-gray-600 mb-1">Total Amount</p>
                       <p className="text-xl font-bold text-[#BE220E]">
-                        ₦{order.total.toLocaleString()}
+                        {fmt(order.total)}
                       </p>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {order.status !== 'cancelled' && order.status !== 'delivered' && (
                         <Link to={`/buyer/track-order/${order.id}`}>
                           <Button variant="outline" size="sm">
@@ -305,13 +355,34 @@ export default function BuyerOrders() {
                           </Button>
                         </Link>
                       )}
+                      {order.status === 'delivered' && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => { setReturnOrder(order); setReturnReason(''); }}
+                            className="text-orange-600 hover:bg-orange-50"
+                          >
+                            <RotateCcw className="w-4 h-4 mr-1" />
+                            Return
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDownloadInvoice(order.id)}
+                            disabled={downloadingInvoice === order.id}
+                          >
+                            {downloadingInvoice === order.id
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <Download className="w-4 h-4 mr-1" />}
+                            Invoice
+                          </Button>
+                        </>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                          // View order details (can expand this later)
-                          navigate(`/buyer/track-order/${order.id}`);
-                        }}
+                        onClick={() => navigate(`/buyer/track-order/${order.id}`)}
                       >
                         View Details
                         <ChevronRight className="w-4 h-4 ml-1" />
@@ -368,6 +439,40 @@ export default function BuyerOrders() {
           </Link>
         </div>
       </div>
+      {/* Return Request Modal */}
+      {returnOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="p-6 border-b flex items-center justify-between">
+              <h2 className="text-xl font-bold">Request Return</h2>
+              <button onClick={() => setReturnOrder(null)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">Order <span className="font-medium">#{returnOrder.id}</span></p>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Reason for return</label>
+                <textarea
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                  placeholder="Please describe why you want to return this order..."
+                  className="w-full border rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#BE220E]"
+                  rows={4}
+                />
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleReturnRequest}
+                  className="flex-1 bg-[#BE220E] hover:bg-[#9a1b0b]"
+                  disabled={submittingReturn || !returnReason.trim()}
+                >
+                  {submittingReturn ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Submit Request'}
+                </Button>
+                <Button variant="outline" onClick={() => setReturnOrder(null)} className="flex-1">Cancel</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

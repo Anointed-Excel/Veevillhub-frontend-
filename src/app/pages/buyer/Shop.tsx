@@ -1,5 +1,6 @@
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { useCart } from '@/contexts/CartContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { api } from '@/lib/api';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
@@ -20,7 +21,7 @@ import {
   Package,
   Loader2,
 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Skeleton } from '@/app/components/ui/skeleton';
 import EmptyState from '@/app/components/EmptyState';
@@ -45,6 +46,7 @@ interface Category {
 
 export default function BuyerShop() {
   const { addToCart, addToWishlist } = useCart();
+  const { fmt } = useCurrency();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
@@ -55,7 +57,10 @@ export default function BuyerShop() {
   const [sortBy, setSortBy] = useState('featured');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suggestRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadProducts = (overrides?: Record<string, unknown>) => {
     setLoading(true);
@@ -151,6 +156,19 @@ export default function BuyerShop() {
     addToWishlist(product.id);
   };
 
+  const fetchSuggestions = useCallback((q: string) => {
+    if (!q || q.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    if (suggestRef.current) clearTimeout(suggestRef.current);
+    suggestRef.current = setTimeout(() => {
+      api.get<unknown>(`/shop/search/suggestions?q=${encodeURIComponent(q)}`).then((res) => {
+        const data = res.data as Record<string, unknown>;
+        const list = (data.suggestions as string[]) || [];
+        setSuggestions(list);
+        setShowSuggestions(list.length > 0);
+      }).catch(() => {});
+    }, 300);
+  }, []);
+
   return (
     <DashboardLayout role="buyer">
       <div className="space-y-6">
@@ -159,16 +177,32 @@ export default function BuyerShop() {
           <h1 className="text-3xl font-bold mb-2">Shop Products</h1>
           <p className="text-white/90 mb-4">Discover amazing products from trusted retailers</p>
 
-          {/* Search bar */}
+          {/* Search bar with autocomplete */}
           <div className="relative max-w-xl">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <Input
               type="text"
               placeholder="Search products..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => { setSearchQuery(e.target.value); fetchSuggestions(e.target.value); }}
+              onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
               className="w-full pl-10 pr-4 bg-white"
             />
+            {showSuggestions && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-xl border z-50 overflow-hidden">
+                {suggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-gray-100 flex items-center gap-2"
+                    onMouseDown={() => { setSearchQuery(s); setShowSuggestions(false); }}
+                  >
+                    <Search className="w-3 h-3 text-gray-400" />
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -387,15 +421,15 @@ export default function BuyerShop() {
                     {product.discount > 0 ? (
                       <>
                         <span className="text-xl font-bold text-[#BE220E]">
-                          ₦{(product.price * (1 - product.discount / 100)).toLocaleString()}
+                          {fmt(product.price * (1 - product.discount / 100))}
                         </span>
                         <span className="text-sm text-gray-500 line-through">
-                          ₦{product.price.toLocaleString()}
+                          {fmt(product.price)}
                         </span>
                       </>
                     ) : (
                       <span className="text-xl font-bold text-[#BE220E]">
-                        ₦{product.price.toLocaleString()}
+                        {fmt(product.price)}
                       </span>
                     )}
                   </div>

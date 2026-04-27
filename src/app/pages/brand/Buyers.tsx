@@ -53,8 +53,8 @@ export default function BrandBuyers() {
   const loadBuyers = async () => {
     setLoading(true);
     try {
-      const res = await api.get<{ buyers: Record<string, unknown>[] }>('/admin/buyers');
-      const rawBuyers = (res.data as unknown as { buyers: Record<string, unknown>[] }).buyers || [];
+      const res = await api.get<Record<string, unknown>[]>('/admin/buyers');
+      const rawBuyers = (res.data as unknown as Record<string, unknown>[]) || [];
       setBuyers(rawBuyers.map((b) => {
         const lastOrderObj = b.lastOrder as Record<string, unknown> | null;
         return {

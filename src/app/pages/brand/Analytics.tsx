@@ -20,10 +20,52 @@ export default function BrandAnalytics() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get<AnalyticsData>('/admin/analytics')
-      .then((res) => setData(res.data as unknown as AnalyticsData))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    Promise.all([
+      api.get<unknown>('/admin/analytics/overview'),
+      api.get<unknown>('/admin/analytics/revenue?granularity=month'),
+      api.get<unknown>('/admin/analytics/orders-by-status'),
+      api.get<unknown>('/admin/analytics/top-products'),
+    ]).then(([overviewRes, revenueRes, statusRes, topRes]) => {
+      const ov = (overviewRes.data as Record<string, unknown>)?.metrics as Record<string, unknown> || {};
+      const rev = (revenueRes.data as Record<string, unknown>)?.series as Record<string, unknown>[] || [];
+      const statuses = (statusRes.data as Record<string, unknown>)?.counts as Record<string, number> || {};
+      const tops = (topRes.data as Record<string, unknown>)?.products as Record<string, unknown>[] || [];
+
+      setData({
+        revenue: {
+          total: Number(ov.gross_revenue) || 0,
+          thisMonth: rev.length > 0 ? Number(rev[rev.length - 1]?.gross) || 0 : 0,
+          lastMonth: rev.length > 1 ? Number(rev[rev.length - 2]?.gross) || 0 : 0,
+          growth: 0,
+        },
+        orders: {
+          total: Number(ov.total_orders) || 0,
+          thisMonth: 0,
+          pending: Number(ov.pending_payment_orders) || 0,
+          completed: Number(ov.delivered_orders) || 0,
+        },
+        users: {
+          total: Number(ov.new_users) || 0,
+          totalBuyers: 0,
+          totalManufacturers: 0,
+          totalRetailers: 0,
+          newThisMonth: Number(ov.new_users) || 0,
+        },
+        products: { total: 0, active: 0, outOfStock: 0 },
+        revenueByMonth: rev.map((r) => ({
+          month: (r.bucket as string)?.slice(0, 7) || '',
+          revenue: Number(r.gross) || 0,
+          orders: Number(r.orders) || 0,
+        })),
+        topProducts: tops.map((p) => ({
+          id: (p.product_id as string) || '',
+          name: (p.name as string) || '',
+          totalSold: Number(p.units_sold) || 0,
+          revenue: Number(p.gross_revenue) || 0,
+        })),
+        ordersByStatus: statuses,
+      });
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   if (loading) {

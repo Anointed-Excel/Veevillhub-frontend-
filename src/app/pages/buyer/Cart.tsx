@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import EmptyState from '@/app/components/EmptyState';
@@ -28,6 +29,7 @@ export default function Cart() {
     wishlistCount,
     addToWishlist,
   } = useCart();
+  const { fmt } = useCurrency();
 
   const handleRemoveItem = (id: string) => {
     removeFromCart(id);
@@ -155,7 +157,7 @@ export default function Cart() {
                     )}
 
                     <p className="text-lg font-bold text-[#BE220E] mb-3">
-                      ₦{(item.price * item.quantity).toLocaleString()}
+                      {fmt(item.price * item.quantity)}
                     </p>
 
                     {/* Quantity Controls */}
@@ -221,7 +223,7 @@ export default function Cart() {
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-gray-600">
                   <span>Subtotal ({cartCount} items)</span>
-                  <span>₦{cartTotal.toLocaleString()}</span>
+                  <span>{fmt(cartTotal)}</span>
                 </div>
 
                 <div className="flex justify-between text-gray-600">
@@ -231,7 +233,7 @@ export default function Cart() {
 
                 <div className="border-t border-gray-200 pt-3 flex justify-between font-bold text-lg">
                   <span>Subtotal</span>
-                  <span className="text-[#BE220E]">₦{cartTotal.toLocaleString()}</span>
+                  <span className="text-[#BE220E]">{fmt(cartTotal)}</span>
                 </div>
               </div>
 
@@ -276,7 +278,7 @@ export default function Cart() {
           <div>
             <p className="text-sm text-gray-600">Total</p>
             <p className="text-xl font-bold text-[#BE220E]">
-              ₦{cartTotal.toLocaleString()}
+              {fmt(cartTotal)}
             </p>
           </div>
           <Button

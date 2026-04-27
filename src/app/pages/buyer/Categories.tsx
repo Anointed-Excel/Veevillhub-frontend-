@@ -87,7 +87,7 @@ export default function BuyerCategories() {
   }, [searchQuery, allCategories]);
 
   const handleCategoryClick = (categoryId: string) => {
-    navigate(`/buyer/shop?category_id=${categoryId}`);
+    navigate(`/buyer/shop?category=${categoryId}`);
   };
 
   return (

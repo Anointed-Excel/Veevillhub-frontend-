@@ -4,9 +4,10 @@ import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
-import { Settings as SettingsIcon, Save, User, Mail, Shield } from 'lucide-react';
+import { Switch } from '@/app/components/ui/switch';
+import { Settings as SettingsIcon, Save, User, Mail, Shield, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 
 interface AdminProfile {
   name: string;
@@ -14,16 +15,30 @@ interface AdminProfile {
   role: string;
 }
 
+interface PlatformSettings {
+  platform_name: string;
+  support_email: string;
+  support_phone: string;
+  commission_rate: number;
+  min_withdrawal: number;
+  currency: string;
+  maintenance_mode: boolean;
+}
+
 export default function BrandSettings() {
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const [settings, setSettings] = useState({
-    platformName: 'VeevillHub',
-    platformEmail: 'support@anointed.com',
-    commissionRate: '10',
-    minWithdrawal: '1000',
+  const [settings, setSettings] = useState<PlatformSettings>({
+    platform_name: 'VeevillHub',
+    support_email: 'support@veevillhub.com',
+    support_phone: '',
+    commission_rate: 10,
+    min_withdrawal: 1000,
     currency: 'NGN',
+    maintenance_mode: false,
   });
 
   useEffect(() => {
@@ -38,8 +53,32 @@ export default function BrandSettings() {
     }).catch(() => {}).finally(() => setProfileLoading(false));
   }, []);
 
-  const handleSave = () => {
-    toast.info('Platform settings are managed server-side and cannot be updated here yet.');
+  useEffect(() => {
+    setSettingsLoading(true);
+    api.get<unknown>('/admin/settings').then((res) => {
+      const d = res.data as Record<string, unknown>;
+      setSettings({
+        platform_name:    (d.platform_name as string)    || 'VeevillHub',
+        support_email:    (d.support_email as string)    || '',
+        support_phone:    (d.support_phone as string)    || '',
+        commission_rate:  Number(d.commission_rate)      || 10,
+        min_withdrawal:   Number(d.min_withdrawal)       || 1000,
+        currency:         (d.currency as string)         || 'NGN',
+        maintenance_mode: !!(d.maintenance_mode),
+      });
+    }).catch(() => {}).finally(() => setSettingsLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.patch('/admin/settings', settings);
+      toast.success('Settings saved successfully');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -88,64 +127,94 @@ export default function BrandSettings() {
             <SettingsIcon className="w-5 h-5" />
             Platform Configuration
           </h2>
-          <div className="space-y-4 max-w-2xl">
-            <div>
-              <Label htmlFor="platformName">Platform Name</Label>
-              <Input
-                id="platformName"
-                value={settings.platformName}
-                onChange={(e) => setSettings({ ...settings, platformName: e.target.value })}
-              />
+          {settingsLoading ? (
+            <div className="flex items-center gap-2 text-gray-500 py-4">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Loading settings…
             </div>
-            <div>
-              <Label htmlFor="platformEmail">Support Email</Label>
-              <Input
-                id="platformEmail"
-                type="email"
-                value={settings.platformEmail}
-                onChange={(e) => setSettings({ ...settings, platformEmail: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="commissionRate">Commission Rate (%)</Label>
-              <Input
-                id="commissionRate"
-                type="number"
-                value={settings.commissionRate}
-                onChange={(e) => setSettings({ ...settings, commissionRate: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="minWithdrawal">Minimum Withdrawal Amount</Label>
-              <Input
-                id="minWithdrawal"
-                type="number"
-                value={settings.minWithdrawal}
-                onChange={(e) => setSettings({ ...settings, minWithdrawal: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="currency">Currency</Label>
-              <Input
-                id="currency"
-                value={settings.currency}
-                onChange={(e) => setSettings({ ...settings, currency: e.target.value })}
-              />
-            </div>
-            <Button onClick={handleSave} className="text-white" style={{ backgroundColor: '#BE220E' }}>
-              <Save className="w-4 h-4 mr-2" />
-              Save Settings
-            </Button>
-          </div>
-        </Card>
+          ) : (
+            <div className="space-y-4 max-w-2xl">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="platformName">Platform Name</Label>
+                  <Input
+                    id="platformName"
+                    value={settings.platform_name}
+                    onChange={(e) => setSettings({ ...settings, platform_name: e.target.value })}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="currency">Currency</Label>
+                  <Input
+                    id="currency"
+                    value={settings.currency}
+                    onChange={(e) => setSettings({ ...settings, currency: e.target.value })}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="supportEmail">Support Email</Label>
+                  <Input
+                    id="supportEmail"
+                    type="email"
+                    value={settings.support_email}
+                    onChange={(e) => setSettings({ ...settings, support_email: e.target.value })}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="supportPhone">Support Phone</Label>
+                  <Input
+                    id="supportPhone"
+                    value={settings.support_phone}
+                    onChange={(e) => setSettings({ ...settings, support_phone: e.target.value })}
+                    placeholder="+234 800 000 0000"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="commissionRate">Commission Rate (%)</Label>
+                  <Input
+                    id="commissionRate"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={settings.commission_rate}
+                    onChange={(e) => setSettings({ ...settings, commission_rate: Number(e.target.value) })}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="minWithdrawal">Minimum Withdrawal (₦)</Label>
+                  <Input
+                    id="minWithdrawal"
+                    type="number"
+                    min={0}
+                    value={settings.min_withdrawal}
+                    onChange={(e) => setSettings({ ...settings, min_withdrawal: Number(e.target.value) })}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
 
-        <Card className="p-6">
-          <h2 className="text-xl font-bold mb-4">System Logs</h2>
-          <div className="space-y-2 font-mono text-sm">
-            <div className="text-green-600">[INFO] System running normally</div>
-            <div className="text-blue-600">[INFO] Database connected</div>
-            <div className="text-gray-600">[INFO] Last backup: 2 hours ago</div>
-          </div>
+              <div className="flex items-center justify-between p-4 rounded-lg border border-gray-200">
+                <div>
+                  <p className="font-medium">Maintenance Mode</p>
+                  <p className="text-sm text-gray-500">When enabled, buyers see a maintenance page</p>
+                </div>
+                <Switch
+                  checked={settings.maintenance_mode}
+                  onCheckedChange={(checked) => setSettings({ ...settings, maintenance_mode: checked })}
+                />
+              </div>
+
+              <Button onClick={handleSave} disabled={saving} className="text-white" style={{ backgroundColor: '#BE220E' }}>
+                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                {saving ? 'Saving…' : 'Save Settings'}
+              </Button>
+            </div>
+          )}
         </Card>
       </div>
     </DashboardLayout>

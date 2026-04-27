@@ -1,4 +1,5 @@
 import DashboardLayout from '@/app/components/DashboardLayout';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -34,6 +35,7 @@ interface Product {
 
 export default function BuyerDeals() {
   const { addToCart, addToWishlist } = useCart();
+  const { fmt } = useCurrency();
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -380,15 +382,15 @@ export default function BuyerDeals() {
 
                     <div className="flex items-baseline gap-2 mb-3">
                       <span className="text-xl font-bold text-[#BE220E]">
-                        ₦{(product.price * (1 - (product.discount || 0) / 100)).toLocaleString()}
+                        {fmt(product.price * (1 - (product.discount || 0) / 100))}
                       </span>
                       <span className="text-sm text-gray-500 line-through">
-                        ₦{product.price.toLocaleString()}
+                        {fmt(product.price)}
                       </span>
                     </div>
 
                     <div className="text-xs text-green-600 font-medium mb-3">
-                      You save ₦{(product.price * (product.discount || 0) / 100).toLocaleString()}
+                      You save {fmt(product.price * (product.discount || 0) / 100)}
                     </div>
 
                     <div className="flex gap-2">

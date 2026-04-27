@@ -131,11 +131,30 @@ export default function BuyerProfile() {
     }).catch(() => {});
   }, []);
 
-  const handleSaveProfile = () => {
-    toast.info('Profile update is not available yet — contact support to update your details.');
+  const handleSaveProfile = async () => {
+    if (!profile.name.trim()) {
+      toast.error('Name cannot be empty');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.patch('/users/profile', {
+        fullName: profile.name.trim(),
+        phoneNumber: profile.phone.trim() || undefined,
+      });
+      toast.success('Profile updated successfully');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to update profile');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
+    if (!security.currentPassword) {
+      toast.error('Enter your current password');
+      return;
+    }
     if (security.newPassword !== security.confirmPassword) {
       toast.error('Passwords do not match');
       return;
@@ -144,7 +163,20 @@ export default function BuyerProfile() {
       toast.error('Password must be at least 8 characters');
       return;
     }
-    toast.info('Password change is not available yet — contact support.');
+    setSaving(true);
+    try {
+      await api.patch('/users/change-password', {
+        currentPassword: security.currentPassword,
+        newPassword: security.newPassword,
+        confirmPassword: security.confirmPassword,
+      });
+      toast.success('Password changed successfully');
+      setSecurity({ ...security, currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to change password');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleAddAddress = async () => {
@@ -180,6 +212,19 @@ export default function BuyerProfile() {
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm('Are you sure you want to permanently delete your account? This cannot be undone.')) return;
+    if (!window.confirm('Last chance — all your orders, addresses, and data will be deleted forever. Continue?')) return;
+    try {
+      await api.delete('/users/me');
+      logout();
+      navigate('/');
+      toast.success('Account deleted.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete account');
+    }
   };
 
   return (
@@ -287,10 +332,9 @@ export default function BuyerProfile() {
                     </div>
                   </div>
                 </div>
-                <p className="text-xs text-gray-400">Profile updates are currently read-only. Contact support to change your details.</p>
                 <div className="flex justify-end">
-                  <Button type="submit" className="bg-[#BE220E] hover:bg-[#9a1b0b]" disabled>
-                    Save Changes
+                  <Button type="submit" className="bg-[#BE220E] hover:bg-[#9a1b0b]" disabled={saving}>
+                    {saving ? 'Saving…' : 'Save Changes'}
                   </Button>
                 </div>
               </form>
@@ -391,8 +435,9 @@ export default function BuyerProfile() {
                     />
                   </div>
                 </div>
-                <p className="text-xs text-gray-400">Password change via this form is not yet available. Contact support.</p>
-                <Button type="submit" className="bg-[#BE220E] hover:bg-[#9a1b0b]" disabled>Change Password</Button>
+                <Button type="submit" className="bg-[#BE220E] hover:bg-[#9a1b0b]" disabled={saving}>
+                  {saving ? 'Changing…' : 'Change Password'}
+                </Button>
               </form>
             </Card>
             <Card className="p-6">
@@ -449,11 +494,18 @@ export default function BuyerProfile() {
           </TabsContent>
         </Tabs>
 
-        {/* Logout */}
-        <Card className="p-6 mt-6">
+        {/* Logout + Delete Account */}
+        <Card className="p-6 mt-6 space-y-3">
           <Button onClick={handleLogout} variant="outline" className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200">
             <LogOut className="w-4 h-4 mr-2" />
             Logout
+          </Button>
+          <Button
+            onClick={handleDeleteAccount}
+            variant="ghost"
+            className="w-full text-gray-400 hover:text-red-700 hover:bg-red-50 text-sm"
+          >
+            Delete Account
           </Button>
         </Card>
       </div>

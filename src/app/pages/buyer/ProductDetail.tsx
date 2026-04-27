@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { api } from '@/lib/api';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
@@ -24,6 +26,8 @@ import {
   User,
   ThumbsUp,
   Home,
+  Loader2,
+  PenLine,
 } from 'lucide-react';
 
 interface Product {
@@ -54,13 +58,21 @@ interface Review {
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { addToCart, addToWishlist, cartCount, wishlistCount } = useCart();
+  const { fmt } = useCurrency();
   const [product, setProduct] = useState<Product | null>(null);
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [selectedVariant, setSelectedVariant] = useState('default');
   const [activeTab, setActiveTab] = useState('description');
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [canReview, setCanReview] = useState(false);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -88,25 +100,32 @@ export default function ProductDetail() {
         discount,
       });
 
-      // Keep mock reviews since no review API yet
-      const mockReviews: Review[] = Array.from({ length: 5 }, (_, i) => ({
-        id: String(i + 1),
-        userName: ['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson', 'David Brown'][i],
-        rating: Math.floor(Math.random() * 2) + 4,
-        date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-        comment: [
-          'Great product! Exactly as described. Would definitely recommend.',
-          'Good quality and fast shipping. Very satisfied with my purchase.',
-          'Nice product but slightly overpriced. Still worth it though.',
-          'Excellent! Better than I expected. Will buy again.',
-          'Very happy with this purchase. Quality is top-notch.',
-        ][i],
-        helpful: Math.floor(Math.random() * 20) + 5,
-        verified: Math.random() > 0.3,
-      }));
-      setReviews(mockReviews);
     }).catch(() => {});
-  }, [id]);
+
+    // Load real reviews
+    setReviewsLoading(true);
+    api.get<unknown>(`/shop/products/${id}/reviews`).then((res) => {
+      const data = res.data as Record<string, unknown>;
+      const raw = (Array.isArray(data) ? data : (data.reviews as unknown[]) || []) as Record<string, unknown>[];
+      setReviews(raw.map((r) => ({
+        id: (r.id as string) || '',
+        userName: (r.user_name as string) || (r.reviewer_name as string) || 'Buyer',
+        rating: Number(r.rating) || 5,
+        date: new Date((r.created_at as string) || '').toLocaleDateString(),
+        comment: (r.comment as string) || (r.body as string) || '',
+        helpful: Number(r.helpful_count) || 0,
+        verified: Boolean(r.verified_purchase),
+      })));
+    }).catch(() => {}).finally(() => setReviewsLoading(false));
+
+    // Check eligibility (only for logged-in buyers)
+    if (user?.role === 'buyer') {
+      api.get<unknown>(`/reviews/eligibility/${id}`).then((res) => {
+        const data = res.data as Record<string, unknown>;
+        setCanReview(Boolean(data.eligible));
+      }).catch(() => {});
+    }
+  }, [id, user]);
 
   if (!product) {
     return (
@@ -140,7 +159,37 @@ export default function ProductDetail() {
     addToWishlist(product.id);
   };
 
-  const averageRating = reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length;
+  const averageRating = reviews.length > 0 ? reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length : 0;
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmittingReview(true);
+    try {
+      await api.post('/reviews', { product_id: id, rating: reviewRating, comment: reviewComment });
+      toast.success('Review submitted!');
+      setShowReviewForm(false);
+      setReviewComment('');
+      setReviewRating(5);
+      setCanReview(false);
+      // Reload reviews
+      const res = await api.get<unknown>(`/shop/products/${id}/reviews`);
+      const data = res.data as Record<string, unknown>;
+      const raw = (Array.isArray(data) ? data : (data.reviews as unknown[]) || []) as Record<string, unknown>[];
+      setReviews(raw.map((r) => ({
+        id: (r.id as string) || '',
+        userName: (r.user_name as string) || 'Buyer',
+        rating: Number(r.rating) || 5,
+        date: new Date((r.created_at as string) || '').toLocaleDateString(),
+        comment: (r.comment as string) || (r.body as string) || '',
+        helpful: Number(r.helpful_count) || 0,
+        verified: Boolean(r.verified_purchase),
+      })));
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to submit review');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   const handleShare = async () => {
     const success = await copyToClipboard(window.location.href);
@@ -287,11 +336,11 @@ export default function ProductDetail() {
               {/* Price */}
               <div className="flex items-baseline gap-3 mb-6">
                 <span className="text-4xl font-bold text-[#BE220E]">
-                  ₦{finalPrice.toLocaleString()}
+                  {fmt(finalPrice)}
                 </span>
                 {product.discount > 0 && (
                   <span className="text-xl text-gray-500 line-through">
-                    ₦{product.price.toLocaleString()}
+                    {fmt(product.price)}
                   </span>
                 )}
               </div>
@@ -443,6 +492,49 @@ export default function ProductDetail() {
 
             {activeTab === 'reviews' && (
               <div className="space-y-6">
+                {/* Write Review Button */}
+                {canReview && !showReviewForm && (
+                  <div className="flex justify-end">
+                    <Button onClick={() => setShowReviewForm(true)} className="bg-[#BE220E] hover:bg-[#9a1b0b]">
+                      <PenLine className="w-4 h-4 mr-2" />
+                      Write a Review
+                    </Button>
+                  </div>
+                )}
+
+                {/* Review Form */}
+                {showReviewForm && (
+                  <form onSubmit={handleSubmitReview} className="bg-gray-50 rounded-xl p-4 space-y-4 border">
+                    <h3 className="font-semibold">Your Review</h3>
+                    <div>
+                      <p className="text-sm text-gray-600 mb-2">Rating</p>
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button key={star} type="button" onClick={() => setReviewRating(star)}>
+                            <Star className={`w-7 h-7 ${star <= reviewRating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <textarea
+                        value={reviewComment}
+                        onChange={(e) => setReviewComment(e.target.value)}
+                        placeholder="Share your experience with this product..."
+                        className="w-full border rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#BE220E]"
+                        rows={4}
+                        required
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="submit" className="bg-[#BE220E] hover:bg-[#9a1b0b]" disabled={submittingReview}>
+                        {submittingReview ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Submit Review'}
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => setShowReviewForm(false)}>Cancel</Button>
+                    </div>
+                  </form>
+                )}
+
                 {/* Rating Summary */}
                 <div className="flex items-start gap-8 pb-6 border-b border-gray-200">
                   <div className="text-center">
@@ -484,6 +576,14 @@ export default function ProductDetail() {
 
                 {/* Reviews List */}
                 <div className="space-y-6">
+                  {reviewsLoading && (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                    </div>
+                  )}
+                  {!reviewsLoading && reviews.length === 0 && (
+                    <p className="text-gray-500 text-center py-6">No reviews yet. Be the first!</p>
+                  )}
                   {reviews.map((review) => (
                     <div key={review.id} className="border-b border-gray-200 pb-6 last:border-0">
                       <div className="flex items-start justify-between mb-2">

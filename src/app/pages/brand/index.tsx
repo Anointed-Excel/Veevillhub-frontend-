@@ -10,3 +10,4 @@ export { default as BrandPromotions } from './Promotions';
 export { default as BrandWallet } from './Wallet';
 export { default as BrandAnalytics } from './Analytics';
 export { default as BrandSettings } from './Settings';
+export { default as BrandCategories } from './Categories';

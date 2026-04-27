@@ -1,11 +1,35 @@
 import { useEffect, useState } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { Card } from '@/app/components/ui/card';
-import { Button } from '@/app/components/ui/button';
-import { Users, Building2, Store, ShoppingBag, Package, ShoppingCart, TrendingUp, DollarSign, AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { Users, Building2, Store, ShoppingBag, Package, ShoppingCart, TrendingUp, DollarSign } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { Skeleton } from '@/app/components/ui/skeleton';
+
+interface Activity {
+  action: string;
+  user: string;
+  time: string;
+  type: 'success' | 'info' | 'warning';
+}
+
+interface TopProduct {
+  id: string;
+  name: string;
+  totalSold: number;
+  revenue: number;
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+  if (mins < 1)   return 'just now';
+  if (mins < 60)  return `${mins} min ago`;
+  if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+  return `${days} day${days > 1 ? 's' : ''} ago`;
+}
 
 export default function BrandDashboard() {
   const [totalUsers, setTotalUsers] = useState<number | null>(null);
@@ -16,6 +40,9 @@ export default function BrandDashboard() {
   const [retailersCount, setRetailersCount] = useState<number | null>(null);
   const [totalRevenue, setTotalRevenue] = useState<number | null>(null);
   const [revenueGrowth, setRevenueGrowth] = useState<number | null>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(true);
 
   useEffect(() => {
     // Total users
@@ -23,7 +50,7 @@ export default function BrandDashboard() {
       .then((res) => setTotalUsers((res.data as Record<string, unknown>).totalUsers as number))
       .catch(() => {});
 
-    // Buyers count — pagination is at res.pagination (top level), not inside res.data
+    // Buyers count
     api.get<unknown>('/admin/buyers?limit=1')
       .then((res) => setBuyersCount(res.pagination?.totalResults ?? null))
       .catch(() => {});
@@ -38,17 +65,61 @@ export default function BrandDashboard() {
       .then((res) => setProductsCount(res.pagination?.totalResults ?? null))
       .catch(() => {});
 
-    // Analytics for manufacturers, retailers, revenue, growth
+    // Analytics — revenue, growth, top products
     api.get<unknown>('/admin/analytics')
       .then((res) => {
         const d = res.data as Record<string, unknown>;
-        const users = d.users as Record<string, unknown>;
+        const users   = d.users   as Record<string, unknown>;
         const revenue = d.revenue as Record<string, unknown>;
         setManufacturersCount(users?.totalManufacturers as number ?? null);
         setRetailersCount(users?.totalRetailers as number ?? null);
         setTotalRevenue(revenue?.total as number ?? null);
         setRevenueGrowth(revenue?.growth as number ?? null);
+        setTopProducts((d.topProducts as TopProduct[]) || []);
       }).catch(() => {});
+
+    // Recent activities: blend last 5 orders + last 3 manufacturers + last 3 retailers
+    Promise.all([
+      api.get<unknown>('/admin/orders?limit=5').catch(() => null),
+      api.get<unknown>('/admin/manufacturers?limit=3').catch(() => null),
+      api.get<unknown>('/admin/retailers?limit=3').catch(() => null),
+    ]).then(([ordersRes, mfgRes, retRes]) => {
+      const list: Activity[] = [];
+
+      const orders = (ordersRes?.data as Record<string, unknown>[]) || [];
+      orders.forEach((o) => {
+        const buyer = (o.buyer as Record<string, unknown>);
+        list.push({
+          action: `New order #${o.order_number}`,
+          user: (buyer?.full_name as string) || 'Buyer',
+          time: timeAgo(o.created_at as string),
+          type: o.status === 'delivered' ? 'success' : o.status === 'cancelled' ? 'warning' : 'info',
+        });
+      });
+
+      const mfgs = (mfgRes?.data as Record<string, unknown>[]) || [];
+      mfgs.forEach((v) => {
+        list.push({
+          action: v.status === 'active' ? 'Manufacturer approved' : 'Manufacturer registered',
+          user: (v.company_name as string) || (v.full_name as string) || 'Manufacturer',
+          time: timeAgo(v.created_at as string),
+          type: v.status === 'active' ? 'success' : 'info',
+        });
+      });
+
+      const rets = (retRes?.data as Record<string, unknown>[]) || [];
+      rets.forEach((v) => {
+        list.push({
+          action: v.status === 'active' ? 'Retailer approved' : 'Retailer registered',
+          user: (v.company_name as string) || (v.full_name as string) || 'Retailer',
+          time: timeAgo(v.created_at as string),
+          type: v.status === 'active' ? 'success' : 'info',
+        });
+      });
+
+      // Sort newest first (best effort — relative strings already formatted)
+      setActivities(list.slice(0, 6));
+    }).finally(() => setActivitiesLoading(false));
   }, []);
 
   const fmt = (val: number | null, fallback = '—') =>
@@ -66,21 +137,6 @@ export default function BrandDashboard() {
     { label: 'Total Orders',   value: fmt(ordersCount),         icon: ShoppingCart, color: '#0891B2', change: '', link: '/brand/orders' },
     { label: 'Revenue',        value: fmtRevenue(totalRevenue), icon: DollarSign,   color: '#16A34A', change: '', link: '/brand/wallet' },
     { label: 'Growth Rate',    value: revenueGrowth !== null ? `${revenueGrowth > 0 ? '+' : ''}${revenueGrowth}%` : '—', icon: TrendingUp, color: '#BE220E', change: '', link: '/brand/analytics' },
-  ];
-
-  const recentActivities = [
-    { action: 'New manufacturer approved', user: 'Alaro Foods Ltd', time: '2 min ago', type: 'success' },
-    { action: 'Product uploaded', user: 'Golden Pasta Co.', time: '15 min ago', type: 'info' },
-    { action: 'Order completed', user: 'Buyer #1234', time: '1 hour ago', type: 'success' },
-    { action: 'Withdrawal processed', user: 'Lagos Retailers', time: '2 hours ago', type: 'warning' },
-    { action: 'New retailer registered', user: 'Sunny Mart', time: '3 hours ago', type: 'info' },
-  ];
-
-  const topPerformers = [
-    { name: 'Golden Pasta Co.', type: 'Manufacturer', revenue: '$45,890', growth: '+34%' },
-    { name: 'Lagos Mega Store', type: 'Retailer', revenue: '$38,450', growth: '+28%' },
-    { name: 'Alaro Foods Ltd', type: 'Manufacturer', revenue: '$32,100', growth: '+22%' },
-    { name: 'Sunny Mart Network', type: 'Retailer', revenue: '$29,780', growth: '+19%' },
   ];
 
   return (
@@ -117,44 +173,77 @@ export default function BrandDashboard() {
           {/* Recent Activities */}
           <Card className="p-6">
             <h2 className="text-xl font-bold mb-4">Recent Activities</h2>
-            <div className="space-y-4">
-              {recentActivities.map((activity, index) => (
-                <div key={index} className="flex items-start gap-3 pb-4 border-b border-gray-100 last:border-0 last:pb-0">
-                  <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                    activity.type === 'success' ? 'bg-green-500' :
-                    activity.type === 'warning' ? 'bg-yellow-500' :
-                    'bg-blue-500'
-                  }`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium">{activity.action}</div>
-                    <div className="text-sm text-gray-600">{activity.user}</div>
+            {activitiesLoading ? (
+              <div className="space-y-4">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-start gap-3 pb-4 border-b border-gray-100 last:border-0">
+                    <Skeleton className="w-2 h-2 rounded-full mt-2 flex-shrink-0" />
+                    <div className="flex-1 space-y-1">
+                      <Skeleton className="h-4 w-3/4 rounded" />
+                      <Skeleton className="h-3 w-1/2 rounded" />
+                    </div>
+                    <Skeleton className="h-3 w-16 rounded" />
                   </div>
-                  <div className="text-xs text-gray-500 whitespace-nowrap">{activity.time}</div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : activities.length === 0 ? (
+              <p className="text-sm text-gray-500 py-4">No recent activity yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {activities.map((activity, index) => (
+                  <div key={index} className="flex items-start gap-3 pb-4 border-b border-gray-100 last:border-0 last:pb-0">
+                    <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+                      activity.type === 'success' ? 'bg-green-500' :
+                      activity.type === 'warning' ? 'bg-yellow-500' :
+                      'bg-blue-500'
+                    }`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium">{activity.action}</div>
+                      <div className="text-sm text-gray-600">{activity.user}</div>
+                    </div>
+                    <div className="text-xs text-gray-500 whitespace-nowrap">{activity.time}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
 
-          {/* Top Performers */}
+          {/* Top Products by Units Sold */}
           <Card className="p-6">
-            <h2 className="text-xl font-bold mb-4">Top Performers</h2>
-            <div className="space-y-4">
-              {topPerformers.map((performer, index) => (
-                <div key={index} className="flex items-center gap-4 pb-4 border-b border-gray-100 last:border-0 last:pb-0">
-                  <div className="w-10 h-10 rounded-full bg-[#BE220E] text-white flex items-center justify-center font-bold">
-                    {index + 1}
+            <h2 className="text-xl font-bold mb-4">Top Products</h2>
+            {topProducts.length === 0 ? (
+              <div className="space-y-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4 pb-4 border-b border-gray-100 last:border-0">
+                    <Skeleton className="w-10 h-10 rounded-full flex-shrink-0" />
+                    <div className="flex-1 space-y-1">
+                      <Skeleton className="h-4 w-3/4 rounded" />
+                      <Skeleton className="h-3 w-1/3 rounded" />
+                    </div>
+                    <Skeleton className="h-4 w-20 rounded" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{performer.name}</div>
-                    <div className="text-sm text-gray-600">{performer.type}</div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {topProducts.map((product, index) => (
+                  <div key={product.id} className="flex items-center gap-4 pb-4 border-b border-gray-100 last:border-0 last:pb-0">
+                    <div className="w-10 h-10 rounded-full bg-[#BE220E] text-white flex items-center justify-center font-bold flex-shrink-0">
+                      {index + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{product.name}</div>
+                      <div className="text-sm text-gray-600">{product.totalSold.toLocaleString()} units sold</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold" style={{ color: '#BE220E' }}>
+                        ₦{product.revenue.toLocaleString()}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-bold" style={{ color: '#BE220E' }}>{performer.revenue}</div>
-                    <div className="text-sm text-green-600">{performer.growth}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </Card>
         </div>
       </div>

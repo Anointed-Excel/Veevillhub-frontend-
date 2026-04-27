@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
+import { CurrencyProvider } from '@/contexts/CurrencyContext';
 import { Toaster } from '@/app/components/ui/sonner';
 
 // Auth pages
@@ -11,6 +12,8 @@ import BuyerSignup from '@/app/pages/auth/BuyerSignup';
 import ManufacturerSignup from '@/app/pages/auth/ManufacturerSignup';
 import RetailerSignup from '@/app/pages/auth/RetailerSignup';
 import VerificationPending from '@/app/pages/auth/VerificationPending';
+import ForgotPassword from '@/app/pages/auth/ForgotPassword';
+import ResetPassword from '@/app/pages/auth/ResetPassword';
 // Brand admin pages
 import {
   BrandDashboard,
@@ -24,7 +27,11 @@ import {
   BrandWallet,
   BrandAnalytics,
   BrandSettings,
+  BrandCategories,
 } from '@/app/pages/brand';
+import BrandRefunds from '@/app/pages/brand/Refunds';
+import BrandMyProducts from '@/app/pages/brand/MyProducts';
+import PaymentVerify from '@/app/pages/buyer/PaymentVerify';
 import {
   VerificationStatus,
   ManufacturerDashboard,
@@ -91,6 +98,8 @@ function AppRoutes() {
       <Route path="/signup/buyer" element={<BuyerSignup />} />
       <Route path="/verification-pending" element={<VerificationPending />} />
       <Route path="/verification-status" element={<ProtectedRoute><VerificationStatus /></ProtectedRoute>} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       {/* Brand (Admin) routes */}
       <Route path="/brand" element={<ProtectedRoute allowedRoles={['brand']}><BrandDashboard /></ProtectedRoute>} />
@@ -104,6 +113,9 @@ function AppRoutes() {
       <Route path="/brand/wallet" element={<ProtectedRoute allowedRoles={['brand']}><BrandWallet /></ProtectedRoute>} />
       <Route path="/brand/analytics" element={<ProtectedRoute allowedRoles={['brand']}><BrandAnalytics /></ProtectedRoute>} />
       <Route path="/brand/settings" element={<ProtectedRoute allowedRoles={['brand']}><BrandSettings /></ProtectedRoute>} />
+      <Route path="/brand/categories" element={<ProtectedRoute allowedRoles={['brand']}><BrandCategories /></ProtectedRoute>} />
+      <Route path="/brand/refunds" element={<ProtectedRoute allowedRoles={['brand']}><BrandRefunds /></ProtectedRoute>} />
+      <Route path="/brand/my-products" element={<ProtectedRoute allowedRoles={['brand']}><BrandMyProducts /></ProtectedRoute>} />
 
       {/* Manufacturer routes */}
       <Route path="/manufacturer" element={<ProtectedRoute allowedRoles={['manufacturer']}><ManufacturerDashboard /></ProtectedRoute>} />
@@ -137,6 +149,7 @@ function AppRoutes() {
       <Route path="/buyer/categories" element={<ProtectedRoute allowedRoles={['buyer']}><BuyerCategories /></ProtectedRoute>} />
       <Route path="/buyer/product/:id" element={<ProtectedRoute allowedRoles={['buyer']}><ProductDetail /></ProtectedRoute>} />
       <Route path="/buyer/track-order/:id" element={<ProtectedRoute allowedRoles={['buyer']}><OrderTracking /></ProtectedRoute>} />
+      <Route path="/payment/verify" element={<PaymentVerify />} />
     </Routes>
   );
 }
@@ -145,10 +158,12 @@ export default function App() {
   return (
     <Router>
       <AuthProvider>
-        <CartProvider>
-          <AppRoutes />
-          <Toaster position="top-right" />
-        </CartProvider>
+        <CurrencyProvider>
+          <CartProvider>
+            <AppRoutes />
+            <Toaster position="top-right" />
+          </CartProvider>
+        </CurrencyProvider>
       </AuthProvider>
     </Router>
   );

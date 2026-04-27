@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { api } from '@/lib/api';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
@@ -36,6 +37,7 @@ export default function Checkout() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { cartItems, cartTotal, clearCart, cartCount } = useCart();
+  const { fmt } = useCurrency();
 
   const [step, setStep] = useState<'address' | 'payment' | 'confirmation'>('address');
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'wallet' | 'transfer' | 'delivery'>('card');
@@ -125,7 +127,7 @@ export default function Checkout() {
       const data = res.data as Record<string, unknown>;
       setPromoDiscount(Number(data.discount) || 0);
       setPromoApplied(true);
-      toast.success(`Promo applied! You save ₦${Number(data.discount).toLocaleString()}`);
+      toast.success(`Promo applied! You save ${fmt(Number(data.discount))}`);
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message || 'Invalid promo code';
       toast.error(msg);
@@ -205,13 +207,6 @@ export default function Checkout() {
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (paymentMethod === 'card') {
-      if (!cardDetails.cardNumber || !cardDetails.cardName || !cardDetails.expiryDate || !cardDetails.cvv) {
-        toast.error('Please fill in all card details');
-        return;
-      }
-    }
-
     if (!selectedAddressId) {
       toast.error('No delivery address selected');
       setStep('address');
@@ -225,9 +220,30 @@ export default function Checkout() {
 
       const res = await api.post<unknown>('/checkout/place-order', body);
       const order = res.data as Record<string, unknown>;
+      const orderId = (order.id as string) || (order.order_id as string) || '';
 
-      setOrderNumber((order.order_number as string) || (order.id as string) || '');
+      setOrderNumber((order.order_number as string) || orderId);
       setOrderTotal(Number(order.total) || total);
+
+      if (paymentMethod === 'card' && orderId) {
+        // Initialize Paystack payment
+        try {
+          const payRes = await api.post<unknown>('/payments/initialize', {
+            orderId,
+            callback_url: `${window.location.origin}/payment/verify`,
+          });
+          const payData = payRes.data as Record<string, unknown>;
+          const authUrl = (payData.authorization_url as string) || (payData.payment_url as string);
+          if (authUrl) {
+            clearCart();
+            window.location.href = authUrl;
+            return;
+          }
+        } catch {
+          // Paystack init failed — fall through to confirmation with pending payment
+          toast.error('Payment gateway unavailable. Order saved — complete payment from your orders page.');
+        }
+      }
 
       clearCart();
       setStep('confirmation');
@@ -498,7 +514,7 @@ export default function Checkout() {
                         <p className="text-sm font-medium line-clamp-1">{item.name}</p>
                         <p className="text-xs text-gray-600">Qty: {item.quantity}</p>
                         <p className="text-sm font-bold text-[#BE220E]">
-                          ₦{(item.price * item.quantity).toLocaleString()}
+                          {fmt(item.price * item.quantity)}
                         </p>
                       </div>
                     </div>
@@ -511,11 +527,11 @@ export default function Checkout() {
                 <div className="border-t border-gray-200 pt-3 space-y-2">
                   <div className="flex justify-between text-sm">
                     <span>Subtotal</span>
-                    <span>₦{cartTotal.toLocaleString()}</span>
+                    <span>{fmt(cartTotal)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span>Shipping</span>
-                    <span>{shippingFee === 0 ? 'Calculated at next step' : `₦${shippingFee.toLocaleString()}`}</span>
+                    <span>{shippingFee === 0 ? 'Calculated at next step' : fmt(shippingFee)}</span>
                   </div>
                 </div>
               </Card>
@@ -693,7 +709,7 @@ export default function Checkout() {
                     </div>
                     {promoApplied && promoDiscount > 0 && (
                       <p className="text-sm text-green-600 mt-1">
-                        Discount: −₦{promoDiscount.toLocaleString()}
+                        Discount: −{fmt(promoDiscount)}
                       </p>
                     )}
                   </div>
@@ -708,7 +724,7 @@ export default function Checkout() {
                     ) : (
                       <>
                         <Lock className="w-4 h-4 mr-2" />
-                        Place Order — ₦{total.toLocaleString()}
+                        Place Order — {fmt(total)}
                       </>
                     )}
                   </Button>
@@ -743,21 +759,21 @@ export default function Checkout() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span>Subtotal</span>
-                    <span>₦{cartTotal.toLocaleString()}</span>
+                    <span>{fmt(cartTotal)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Shipping</span>
-                    <span>{shippingFee === 0 ? 'Free' : `₦${shippingFee.toLocaleString()}`}</span>
+                    <span>{shippingFee === 0 ? 'Free' : fmt(shippingFee)}</span>
                   </div>
                   {promoDiscount > 0 && (
                     <div className="flex justify-between text-green-600">
                       <span>Promo Discount</span>
-                      <span>−₦{promoDiscount.toLocaleString()}</span>
+                      <span>−{fmt(promoDiscount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between font-bold pt-2 border-t border-gray-200">
                     <span>Total</span>
-                    <span className="text-[#BE220E]">₦{total.toLocaleString()}</span>
+                    <span className="text-[#BE220E]">{fmt(total)}</span>
                   </div>
                 </div>
               </Card>
@@ -785,7 +801,7 @@ export default function Checkout() {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-gray-600 mb-1">Total Amount</p>
-                    <p className="font-bold">₦{orderTotal.toLocaleString()}</p>
+                    <p className="font-bold">{fmt(orderTotal)}</p>
                   </div>
                   <div>
                     <p className="text-gray-600 mb-1">Payment Method</p>

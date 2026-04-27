@@ -180,7 +180,7 @@ export default function ManufacturerDashboard() {
                   )}
                   <div className="text-xs font-medium truncate">{p.name}</div>
                   <div className="text-xs text-gray-500 mt-0.5">{p.sku}</div>
-                  <div className="text-sm font-bold mt-1" style={{ color: '#BE220E' }}>{fmt(p.sales_price)}</div>
+                  <div className="text-sm font-bold mt-1" style={{ color: '#BE220E' }}>{fmt(p.sales_price ?? p.regular_price ?? 0)}</div>
                 </div>
               ))}
             </div>

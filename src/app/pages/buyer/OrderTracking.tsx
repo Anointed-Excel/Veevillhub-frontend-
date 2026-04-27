@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import {
@@ -14,6 +15,8 @@ import {
   Share2,
   Home,
   Calendar,
+  Download,
+  Loader2,
 } from 'lucide-react';
 import EmptyState from '@/app/components/EmptyState';
 import { Skeleton } from '@/app/components/ui/skeleton';
@@ -60,10 +63,25 @@ interface TrackingStep {
 
 export default function OrderTracking() {
   const { id } = useParams();
+  const { fmt } = useCurrency();
   const navigate = useNavigate();
   const [order, setOrder] = useState<Order | null>(null);
   const [trackingSteps, setTrackingSteps] = useState<TrackingStep[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingInvoice, setDownloadingInvoice] = useState(false);
+
+  const handleDownloadInvoice = async () => {
+    if (!id) return;
+    setDownloadingInvoice(true);
+    try {
+      const res = await api.get<unknown>(`/orders/${id}/invoice`);
+      const data = res.data as Record<string, unknown>;
+      const url = (data.invoice_url as string) || (data.url as string);
+      if (url) { window.open(url, '_blank'); }
+      else { toast.error('Invoice not available yet'); }
+    } catch { toast.error('Could not download invoice'); }
+    finally { setDownloadingInvoice(false); }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -394,7 +412,7 @@ export default function OrderTracking() {
                     </Link>
                     <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
                     <p className="text-sm font-bold text-[#BE220E]">
-                      ₦{(item.price * item.quantity).toLocaleString()}
+                      {fmt(item.price * item.quantity)}
                     </p>
                   </div>
                 </div>
@@ -405,17 +423,17 @@ export default function OrderTracking() {
             <div className="mt-6 pt-6 border-t border-gray-200 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Subtotal</span>
-                <span className="font-medium">₦{order.subtotal.toLocaleString()}</span>
+                <span className="font-medium">{fmt(order.subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Shipping Fee</span>
                 <span className="font-medium">
-                  {order.shippingFee === 0 ? 'Free' : `₦${order.shippingFee.toLocaleString()}`}
+                  {order.shippingFee === 0 ? 'Free' : fmt(order.shippingFee)}
                 </span>
               </div>
               <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-200">
                 <span>Total</span>
-                <span className="text-[#BE220E]">₦{order.total.toLocaleString()}</span>
+                <span className="text-[#BE220E]">{fmt(order.total)}</span>
               </div>
             </div>
           </Card>
@@ -463,6 +481,19 @@ export default function OrderTracking() {
                     <Share2 className="w-4 h-4 mr-2" />
                     Share Tracking Link
                   </Button>
+                  {(order.status === 'delivered' || order.status === 'shipped') && (
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={handleDownloadInvoice}
+                      disabled={downloadingInvoice}
+                    >
+                      {downloadingInvoice
+                        ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        : <Download className="w-4 h-4 mr-2" />}
+                      Download Invoice
+                    </Button>
+                  )}
                   <Link to="/buyer/orders">
                     <Button variant="outline" className="w-full">
                       <Package className="w-4 h-4 mr-2" />

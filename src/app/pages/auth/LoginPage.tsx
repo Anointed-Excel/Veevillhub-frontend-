@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, NavLink } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -64,9 +64,9 @@ export default function LoginPage() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <Label htmlFor="password">Password</Label>
-                <button type="button" className="text-sm hover:underline" style={{ color: '#BE220E' }}>
+                <Link to="/forgot-password" className="text-sm hover:underline" style={{ color: '#BE220E' }}>
                   Forgot password?
-                </button>
+                </Link>
               </div>
               <Input
                 id="password"
