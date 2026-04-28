@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import {
   ArrowLeft, User, MapPin, Phone, Mail, Lock, Bell, Eye, EyeOff,
-  LogOut, Package, Heart, Home, Shield, Plus, Loader2, CheckCircle,
+  LogOut, Package, Heart, Home, Shield, Plus, Loader2, CheckCircle, Trash2, Star,
 } from 'lucide-react';
 
 interface Address {
@@ -70,8 +70,17 @@ export default function BuyerProfile() {
   });
 
   const [notifications, setNotifications] = useState({
-    orderUpdates: true, promotions: false, newsletter: false, sms: true,
+    orderUpdates: true, priceDrop: false, marketing: false, newFeaturedProduct: false,
   });
+  const [notifPrefsLoading, setNotifPrefsLoading] = useState(true);
+  const [savingNotifKey, setSavingNotifKey] = useState<string | null>(null);
+
+  // Account deletion modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<'password' | 'otp'>('password');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteOtp, setDeleteOtp] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -122,6 +131,21 @@ export default function BuyerProfile() {
     }).catch(() => {}).finally(() => setAddressesLoading(false));
   }, []);
 
+  // Load notification preferences
+  useEffect(() => {
+    setNotifPrefsLoading(true);
+    api.get<unknown>('/users/notification-preferences').then((res) => {
+      const d = res.data as Record<string, unknown>;
+      const prefs = (d.preferences || d) as Record<string, unknown>;
+      setNotifications({
+        orderUpdates: prefs.orderUpdates !== false,
+        priceDrop: !!prefs.priceDrop,
+        marketing: !!prefs.marketing,
+        newFeaturedProduct: !!prefs.newFeaturedProduct,
+      });
+    }).catch(() => {}).finally(() => setNotifPrefsLoading(false));
+  }, []);
+
   // Load Nigerian states for address form
   useEffect(() => {
     api.get<unknown>('/checkout/states').then((res) => {
@@ -138,7 +162,7 @@ export default function BuyerProfile() {
     }
     setSaving(true);
     try {
-      await api.patch('/users/profile', {
+      await api.patch('/users/me', {
         fullName: profile.name.trim(),
         phoneNumber: profile.phone.trim() || undefined,
       });
@@ -209,22 +233,73 @@ export default function BuyerProfile() {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleToggleNotif = async (key: keyof typeof notifications, value: boolean) => {
+    setNotifications((prev) => ({ ...prev, [key]: value }));
+    setSavingNotifKey(key);
+    try {
+      await api.patch('/users/notification-preferences', { [key]: value });
+    } catch (err) {
+      // Revert on failure
+      setNotifications((prev) => ({ ...prev, [key]: !value }));
+      toast.error(err instanceof ApiError ? err.message : 'Failed to save preference');
+    } finally {
+      setSavingNotifKey(null);
+    }
   };
 
-  const handleDeleteAccount = async () => {
-    if (!window.confirm('Are you sure you want to permanently delete your account? This cannot be undone.')) return;
-    if (!window.confirm('Last chance — all your orders, addresses, and data will be deleted forever. Continue?')) return;
+  const handleDeleteRequest = async () => {
+    if (!deletePassword) { toast.error('Enter your password'); return; }
+    setDeletingAccount(true);
     try {
-      await api.delete('/users/me');
+      await api.post('/users/account/delete-request', { password: deletePassword });
+      setDeleteStep('otp');
+      toast.success('A 6-digit code has been sent to your email');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to initiate deletion');
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteOtp || deleteOtp.length !== 6) { toast.error('Enter the 6-digit code'); return; }
+    setDeletingAccount(true);
+    try {
+      await api.post('/users/account/delete-confirm', { otp: deleteOtp });
       logout();
       navigate('/');
       toast.success('Account deleted.');
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete account');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Invalid or expired code');
+    } finally {
+      setDeletingAccount(false);
     }
+  };
+
+  const handleDeleteAddress = async (id: string) => {
+    if (!window.confirm('Remove this address?')) return;
+    try {
+      await api.delete(`/checkout/addresses/${id}`);
+      setAddresses((prev) => prev.filter((a) => a.id !== id));
+      toast.success('Address removed');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to remove address');
+    }
+  };
+
+  const handleSetDefault = async (id: string) => {
+    try {
+      await api.patch(`/checkout/addresses/${id}/default`, {});
+      setAddresses((prev) => prev.map((a) => ({ ...a, is_default: a.id === id })));
+      toast.success('Default address updated');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to set default');
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
   };
 
   return (
@@ -365,7 +440,7 @@ export default function BuyerProfile() {
                 <div className="space-y-4">
                   {addresses.map((address) => (
                     <Card key={address.id} className={`p-4 border-2 ${address.is_default ? 'border-[#BE220E]' : 'border-gray-200'}`}>
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-start justify-between gap-3">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="font-semibold">{address.full_name}</span>
@@ -376,6 +451,16 @@ export default function BuyerProfile() {
                           <p className="text-sm text-gray-600">{address.phone_number}</p>
                           <p className="text-sm text-gray-600">{address.street_address}</p>
                           <p className="text-sm text-gray-600">{address.city}, {address.state} {address.zipcode}</p>
+                        </div>
+                        <div className="flex flex-col gap-2 flex-shrink-0">
+                          {!address.is_default && (
+                            <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => handleSetDefault(address.id)}>
+                              Set Default
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50 h-7 px-2" onClick={() => handleDeleteAddress(address.id)}>
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
                         </div>
                       </div>
                     </Card>
@@ -471,25 +556,29 @@ export default function BuyerProfile() {
           <TabsContent value="notifications">
             <Card className="p-6">
               <h3 className="text-lg font-bold mb-4">Notification Preferences</h3>
-              <div className="space-y-4">
-                {[
-                  { key: 'orderUpdates', label: 'Order Updates', desc: 'Get notified about your orders' },
-                  { key: 'promotions', label: 'Promotions & Offers', desc: 'Receive special offers and discounts' },
-                  { key: 'newsletter', label: 'Newsletter', desc: 'Weekly newsletter with curated products' },
-                  { key: 'sms', label: 'SMS Notifications', desc: 'Receive updates via SMS' },
-                ].map(({ key, label, desc }) => (
-                  <div key={key} className="flex items-center justify-between p-4 rounded-lg border border-gray-200">
-                    <div>
-                      <p className="font-medium">{label}</p>
-                      <p className="text-sm text-gray-500">{desc}</p>
+              {notifPrefsLoading ? (
+                <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+              ) : (
+                <div className="space-y-4">
+                  {([
+                    { key: 'orderUpdates' as const, label: 'Order Updates', desc: 'Get notified about your order status changes' },
+                    { key: 'priceDrop' as const, label: 'Price Drop Alerts', desc: 'Notify when prices drop on items you watched' },
+                    { key: 'marketing' as const, label: 'Promotions & Offers', desc: 'Receive special offers and discount alerts' },
+                    { key: 'newFeaturedProduct' as const, label: 'New Featured Products', desc: 'Be the first to know about new arrivals' },
+                  ]).map(({ key, label, desc }) => (
+                    <div key={key} className="flex items-center justify-between p-4 rounded-lg border border-gray-200">
+                      <div>
+                        <p className="font-medium">{label}</p>
+                        <p className="text-sm text-gray-500">{desc}</p>
+                      </div>
+                      {savingNotifKey === key
+                        ? <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+                        : <Switch checked={notifications[key]} onCheckedChange={(v) => handleToggleNotif(key, v)} />
+                      }
                     </div>
-                    <Switch
-                      checked={notifications[key as keyof typeof notifications]}
-                      onCheckedChange={(checked) => setNotifications({ ...notifications, [key]: checked })}
-                    />
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </Card>
           </TabsContent>
         </Tabs>
@@ -501,7 +590,7 @@ export default function BuyerProfile() {
             Logout
           </Button>
           <Button
-            onClick={handleDeleteAccount}
+            onClick={() => { setShowDeleteModal(true); setDeleteStep('password'); setDeletePassword(''); setDeleteOtp(''); }}
             variant="ghost"
             className="w-full text-gray-400 hover:text-red-700 hover:bg-red-50 text-sm"
           >
@@ -509,6 +598,44 @@ export default function BuyerProfile() {
           </Button>
         </Card>
       </div>
+
+      {/* Delete Account Modal */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Delete Account</DialogTitle>
+          </DialogHeader>
+          {deleteStep === 'password' ? (
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-gray-600">This will permanently delete your account, orders, and all data. Enter your password to continue.</p>
+              <div>
+                <Label>Password</Label>
+                <Input type="password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} placeholder="Your current password" className="mt-1" />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowDeleteModal(false)}>Cancel</Button>
+                <Button onClick={handleDeleteRequest} disabled={deletingAccount} className="bg-red-600 hover:bg-red-700 text-white">
+                  {deletingAccount ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Continue'}
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-gray-600">Enter the 6-digit code sent to your email to confirm deletion.</p>
+              <div>
+                <Label>Verification Code</Label>
+                <Input value={deleteOtp} onChange={(e) => setDeleteOtp(e.target.value)} placeholder="000000" maxLength={6} className="mt-1 text-center text-2xl tracking-widest" />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDeleteStep('password')}>Back</Button>
+                <Button onClick={handleDeleteConfirm} disabled={deletingAccount} className="bg-red-600 hover:bg-red-700 text-white">
+                  {deletingAccount ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Delete My Account'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Add Address Modal */}
       <Dialog open={showAddAddress} onOpenChange={setShowAddAddress}>

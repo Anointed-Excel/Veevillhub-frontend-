@@ -31,6 +31,7 @@ import {
 } from '@/app/pages/brand';
 import BrandRefunds from '@/app/pages/brand/Refunds';
 import BrandMyProducts from '@/app/pages/brand/MyProducts';
+import BrandReviews from '@/app/pages/brand/Reviews';
 import PaymentVerify from '@/app/pages/buyer/PaymentVerify';
 import {
   VerificationStatus,
@@ -116,6 +117,7 @@ function AppRoutes() {
       <Route path="/brand/categories" element={<ProtectedRoute allowedRoles={['brand']}><BrandCategories /></ProtectedRoute>} />
       <Route path="/brand/refunds" element={<ProtectedRoute allowedRoles={['brand']}><BrandRefunds /></ProtectedRoute>} />
       <Route path="/brand/my-products" element={<ProtectedRoute allowedRoles={['brand']}><BrandMyProducts /></ProtectedRoute>} />
+      <Route path="/brand/reviews" element={<ProtectedRoute allowedRoles={['brand']}><BrandReviews /></ProtectedRoute>} />
 
       {/* Manufacturer routes */}
       <Route path="/manufacturer" element={<ProtectedRoute allowedRoles={['manufacturer']}><ManufacturerDashboard /></ProtectedRoute>} />

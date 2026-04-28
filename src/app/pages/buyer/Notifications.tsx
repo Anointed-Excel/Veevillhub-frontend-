@@ -16,7 +16,7 @@ import {
   ShoppingCart,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { toast } from 'sonner';
 import { Skeleton } from '@/app/components/ui/skeleton';
@@ -32,6 +32,93 @@ interface Notification {
   actionLink?: string;
   actionText?: string;
   metadata?: any;
+}
+
+function NotificationPreferences() {
+  const PREFS = [
+    { key: 'orderUpdates', icon: Package, color: 'text-blue-600', bg: 'bg-blue-100', label: 'Order Updates', desc: 'Get notified about order status changes' },
+    { key: 'priceDrop', icon: TrendingDown, color: 'text-green-600', bg: 'bg-green-100', label: 'Price Drop Alerts', desc: 'Notify when prices drop on watched items' },
+    { key: 'marketing', icon: Tag, color: 'text-purple-600', bg: 'bg-purple-100', label: 'Promotional Offers', desc: 'Receive updates about deals and promotions' },
+    { key: 'wishlistBackInStock', icon: Heart, color: 'text-pink-600', bg: 'bg-pink-100', label: 'Wishlist Restocked', desc: 'Get notified when wishlist items are back in stock' },
+  ] as const;
+
+  type PrefKey = typeof PREFS[number]['key'];
+
+  const [prefs, setPrefs] = useState<Record<PrefKey, boolean>>({
+    orderUpdates: true, priceDrop: false, marketing: false, wishlistBackInStock: true,
+  });
+  const [loading, setLoading] = useState(true);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    api.get<unknown>('/users/notification-preferences').then((res) => {
+      if (!mountedRef.current) return;
+      const d = res.data as Record<string, unknown>;
+      const p = (d.preferences || d) as Record<string, unknown>;
+      setPrefs({
+        orderUpdates: p.orderUpdates !== false,
+        priceDrop: !!p.priceDrop,
+        marketing: !!p.marketing,
+        wishlistBackInStock: p.wishlistBackInStock !== false,
+      });
+    }).catch(() => {}).finally(() => { if (mountedRef.current) setLoading(false); });
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const handleToggle = async (key: PrefKey, value: boolean) => {
+    setPrefs((prev) => ({ ...prev, [key]: value }));
+    setSavingKey(key);
+    try {
+      await api.patch('/users/notification-preferences', { [key]: value });
+    } catch (err) {
+      setPrefs((prev) => ({ ...prev, [key]: !value }));
+      toast.error(err instanceof ApiError ? err.message : 'Failed to save preference');
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  return (
+    <Card className="p-6 bg-gradient-to-r from-blue-50 to-purple-50">
+      <h3 className="font-bold text-lg mb-4">Notification Preferences</h3>
+      {loading ? (
+        <div className="flex justify-center py-4"><AlertCircle className="w-5 h-5 animate-pulse text-gray-400" /></div>
+      ) : (
+        <div className="space-y-3">
+          {PREFS.map(({ key, icon: Icon, color, bg, label, desc }) => (
+            <div key={key} className="flex items-center justify-between p-3 bg-white rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 ${bg} rounded-lg flex items-center justify-center`}>
+                  <Icon className={`w-5 h-5 ${color}`} />
+                </div>
+                <div>
+                  <div className="font-medium">{label}</div>
+                  <div className="text-sm text-gray-600">{desc}</div>
+                </div>
+              </div>
+              {savingKey === key ? (
+                <div className="w-11 h-6 flex items-center justify-center">
+                  <div className="w-4 h-4 border-2 border-[#BE220E] border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : (
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={prefs[key]}
+                    onChange={(e) => handleToggle(key, e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#BE220E]/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#BE220E]"></div>
+                </label>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
 }
 
 export default function BuyerNotifications() {
@@ -330,66 +417,7 @@ export default function BuyerNotifications() {
         )}
 
         {/* Notification Preferences */}
-        <Card className="p-6 bg-gradient-to-r from-blue-50 to-purple-50">
-          <h3 className="font-bold text-lg mb-4">Notification Preferences</h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-white rounded-lg">
-              <div className="flex items-center gap-3">
-                <Package className="w-5 h-5 text-blue-600" />
-                <div>
-                  <div className="font-medium">Order Updates</div>
-                  <div className="text-sm text-gray-600">Get notified about order status changes</div>
-                </div>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" defaultChecked className="sr-only peer" />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#BE220E]/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#BE220E]"></div>
-              </label>
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-white rounded-lg">
-              <div className="flex items-center gap-3">
-                <TrendingDown className="w-5 h-5 text-green-600" />
-                <div>
-                  <div className="font-medium">Price Drop Alerts</div>
-                  <div className="text-sm text-gray-600">Notify when prices drop on watched items</div>
-                </div>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" defaultChecked className="sr-only peer" />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#BE220E]/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#BE220E]"></div>
-              </label>
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-white rounded-lg">
-              <div className="flex items-center gap-3">
-                <Tag className="w-5 h-5 text-purple-600" />
-                <div>
-                  <div className="font-medium">Promotional Offers</div>
-                  <div className="text-sm text-gray-600">Receive updates about deals and promotions</div>
-                </div>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" defaultChecked className="sr-only peer" />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#BE220E]/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#BE220E]"></div>
-              </label>
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-white rounded-lg">
-              <div className="flex items-center gap-3">
-                <Heart className="w-5 h-5 text-pink-600" />
-                <div>
-                  <div className="font-medium">Wishlist Updates</div>
-                  <div className="text-sm text-gray-600">Get notified when wishlist items are restocked</div>
-                </div>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" defaultChecked className="sr-only peer" />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#BE220E]/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#BE220E]"></div>
-              </label>
-            </div>
-          </div>
-        </Card>
+        <NotificationPreferences />
       </div>
     </DashboardLayout>
   );

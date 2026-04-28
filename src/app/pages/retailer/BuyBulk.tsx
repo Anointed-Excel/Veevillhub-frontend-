@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
@@ -6,11 +6,13 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
-import { Search, ShoppingCart, Package, Building2, Star, TrendingUp, Filter } from 'lucide-react';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import { Search, ShoppingCart, Package, Building2, Star, Loader2, Trash2, Image as ImageIcon } from 'lucide-react';
 import EmptyState from '@/app/components/EmptyState';
 import { toast } from 'sonner';
+import { api, ApiError } from '@/lib/api';
 
-interface ManufacturerProduct {
+interface BulkProduct {
   id: string;
   name: string;
   manufacturer: string;
@@ -19,178 +21,180 @@ interface ManufacturerProduct {
   price: number;
   moq: number;
   stock: number;
-  rating: number;
   image: string;
   description: string;
 }
 
 interface CartItem {
-  product: ManufacturerProduct;
+  product: BulkProduct;
   quantity: number;
 }
 
-export default function RetailerBuyBulk() {
-  const [products] = useState<ManufacturerProduct[]>([
-    {
-      id: '1',
-      name: 'Premium African Print Fabric',
-      manufacturer: 'Textile Masters Ltd',
-      sku: 'MFG-FAB-001',
-      category: 'Textiles',
-      price: 25.99,
-      moq: 100,
-      stock: 5000,
-      rating: 4.8,
-      image: 'https://images.unsplash.com/photo-1558769132-cb1aea9c5b0d?w=400',
-      description: 'High-quality African print fabric perfect for dresses and home decor',
-    },
-    {
-      id: '2',
-      name: 'Cotton Fabric Roll',
-      manufacturer: 'Cotton Works Inc',
-      sku: 'MFG-FAB-002',
-      category: 'Textiles',
-      price: 18.50,
-      moq: 50,
-      stock: 1200,
-      rating: 4.6,
-      image: 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=400',
-      description: '100% pure cotton fabric roll, ideal for clothing',
-    },
-    {
-      id: '3',
-      name: 'Leather Material Pack',
-      manufacturer: 'Premium Leather Co',
-      sku: 'MFG-LEA-001',
-      category: 'Materials',
-      price: 45.00,
-      moq: 30,
-      stock: 800,
-      rating: 4.9,
-      image: 'https://images.unsplash.com/photo-1590874103328-eac38a683ce7?w=400',
-      description: 'Premium leather material for bags and accessories',
-    },
-    {
-      id: '4',
-      name: 'Fashion Buttons Set',
-      manufacturer: 'Accessories Hub',
-      sku: 'MFG-ACC-001',
-      category: 'Accessories',
-      price: 8.99,
-      moq: 200,
-      stock: 15000,
-      rating: 4.5,
-      image: 'https://images.unsplash.com/photo-1611652022419-a9419f74343a?w=400',
-      description: 'Assorted fashion buttons for clothing',
-    },
-    {
-      id: '5',
-      name: 'Zipper Pack',
-      manufacturer: 'FastClip Manufacturing',
-      sku: 'MFG-ACC-002',
-      category: 'Accessories',
-      price: 12.50,
-      moq: 100,
-      stock: 8000,
-      rating: 4.7,
-      image: 'https://images.unsplash.com/photo-1556656793-08538906a9f8?w=400',
-      description: 'High-quality zippers in various sizes',
-    },
-    {
-      id: '6',
-      name: 'Packaging Boxes',
-      manufacturer: 'BoxWorks Ltd',
-      sku: 'MFG-PKG-001',
-      category: 'Packaging',
-      price: 5.99,
-      moq: 500,
-      stock: 20000,
-      rating: 4.4,
-      image: 'https://images.unsplash.com/photo-1566576721346-d4a3b4eaeb55?w=400',
-      description: 'Eco-friendly packaging boxes for retail',
-    },
-  ]);
+const mapProduct = (p: Record<string, unknown>): BulkProduct => ({
+  id: p.id as string,
+  name: (p.name as string) || '',
+  manufacturer: (p.vendor_name as string) || (p.brand as string) || 'Manufacturer',
+  sku: (p.sku as string) || '',
+  category: (p.category_name as string) || (p.category as string) || '',
+  price: Number(p.regular_price) || Number(p.price) || 0,
+  moq: Number(p.moq) || 1,
+  stock: Number(p.stock_quantity) || Number(p.stock) || 0,
+  image: (p.image_url as string) || (p.image as string) || '',
+  description: (p.description as string) || '',
+});
 
+export default function RetailerBuyBulk() {
+  const [products, setProducts] = useState<BulkProduct[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
-  const [filterManufacturer, setFilterManufacturer] = useState('all');
   const [sortBy, setSortBy] = useState('popular');
+
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showOrderModal, setShowOrderModal] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<ManufacturerProduct | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<BulkProduct | null>(null);
   const [orderQuantity, setOrderQuantity] = useState('');
 
-  const categories = ['Textiles', 'Materials', 'Accessories', 'Packaging', 'Components'];
-  const manufacturers = Array.from(new Set(products.map(p => p.manufacturer)));
+  // Checkout modal
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [placingOrder, setPlacingOrder] = useState(false);
+  const [checkoutAddress, setCheckoutAddress] = useState({
+    fullName: '', phone: '', streetAddress: '', city: '', state: '', zipcode: '',
+  });
+  const [savedAddresses, setSavedAddresses] = useState<Array<{ id: string; label: string; full_name: string; phone_number: string; street_address: string; city: string; state: string; zipcode: string }>>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string>('new');
 
-  const filteredProducts = products.filter((product) => {
-    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         product.manufacturer.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = filterCategory === 'all' || product.category === filterCategory;
-    const matchesManufacturer = filterManufacturer === 'all' || product.manufacturer === filterManufacturer;
-    return matchesSearch && matchesCategory && matchesManufacturer;
-  }).sort((a, b) => {
-    switch (sortBy) {
-      case 'price-low':
-        return a.price - b.price;
-      case 'price-high':
-        return b.price - a.price;
-      case 'rating':
-        return b.rating - a.rating;
-      case 'popular':
-      default:
-        return b.rating - a.rating;
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [prodRes, catRes] = await Promise.all([
+        api.get<unknown>('/products'),
+        api.get<unknown>('/shop/categories'),
+      ]);
+      const prodData = prodRes.data as Record<string, unknown>;
+      const catData = catRes.data as Record<string, unknown>;
+
+      const raw = (prodData.products || []) as Record<string, unknown>[];
+      // Only show products with an MOQ set (manufacturer products)
+      const bulk = raw.filter((p) => Number(p.moq) >= 1);
+      setProducts(bulk.map(mapProduct));
+
+      // Extract flat category names
+      const rawCats = (catData.categories || []) as Record<string, unknown>[];
+      const catNames: string[] = [];
+      const flatten = (items: Record<string, unknown>[]) => {
+        items.forEach((c) => {
+          catNames.push((c.name as string) || '');
+          if (c.children) flatten(c.children as Record<string, unknown>[]);
+        });
+      };
+      flatten(rawCats);
+      setCategories(catNames.filter(Boolean));
+    } catch {
+      toast.error('Failed to load products');
+    } finally {
+      setLoading(false);
     }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Load saved addresses for checkout
+  useEffect(() => {
+    api.get<unknown>('/checkout/addresses').then((res) => {
+      const d = res.data as Record<string, unknown>;
+      const raw = (d.addresses || []) as Record<string, unknown>[];
+      setSavedAddresses(raw.map((a) => ({
+        id: a.id as string,
+        label: `${a.full_name} — ${a.street_address}, ${a.city}`,
+        full_name: a.full_name as string,
+        phone_number: a.phone_number as string,
+        street_address: a.street_address as string,
+        city: a.city as string,
+        state: a.state as string,
+        zipcode: (a.zipcode as string) || '',
+      })));
+    }).catch(() => {});
+  }, []);
+
+  const filteredProducts = products.filter((p) => {
+    const q = searchQuery.toLowerCase();
+    const matchSearch = p.name.toLowerCase().includes(q) || p.manufacturer.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q);
+    const matchCat = filterCategory === 'all' || p.category === filterCategory;
+    return matchSearch && matchCat;
+  }).sort((a, b) => {
+    if (sortBy === 'price-low') return a.price - b.price;
+    if (sortBy === 'price-high') return b.price - a.price;
+    return 0;
   });
 
   const handleAddToCart = () => {
-    if (!selectedProduct || !orderQuantity) {
-      toast.error('Please enter quantity');
-      return;
-    }
-
+    if (!selectedProduct || !orderQuantity) { toast.error('Enter quantity'); return; }
     const qty = parseInt(orderQuantity);
-    if (qty < selectedProduct.moq) {
-      toast.error(`Minimum order quantity is ${selectedProduct.moq} units`);
-      return;
+    if (isNaN(qty) || qty < selectedProduct.moq) {
+      toast.error(`Minimum order is ${selectedProduct.moq} units`); return;
     }
-
-    const existingItem = cart.find(item => item.product.id === selectedProduct.id);
-    if (existingItem) {
-      setCart(cart.map(item =>
-        item.product.id === selectedProduct.id
-          ? { ...item, quantity: item.quantity + qty }
-          : item
-      ));
-      toast.success('Updated cart quantity');
-    } else {
-      setCart([...cart, { product: selectedProduct, quantity: qty }]);
-      toast.success('Added to cart');
+    if (qty > selectedProduct.stock) {
+      toast.error(`Only ${selectedProduct.stock} units available`); return;
     }
-
+    setCart((prev) => {
+      const existing = prev.find((i) => i.product.id === selectedProduct.id);
+      if (existing) return prev.map((i) => i.product.id === selectedProduct.id ? { ...i, quantity: i.quantity + qty } : i);
+      return [...prev, { product: selectedProduct, quantity: qty }];
+    });
+    toast.success('Added to cart');
     setShowOrderModal(false);
     setSelectedProduct(null);
     setOrderQuantity('');
   };
 
-  const handleRemoveFromCart = (productId: string) => {
-    setCart(cart.filter(item => item.product.id !== productId));
-    toast.success('Removed from cart');
-  };
+  const handlePlaceOrder = async () => {
+    if (cart.length === 0) return;
 
-  const handleCheckout = () => {
-    if (cart.length === 0) {
-      toast.error('Cart is empty');
-      return;
+    let shippingAddressId = selectedAddressId !== 'new' ? selectedAddressId : undefined;
+
+    // If using new address, save it first
+    if (selectedAddressId === 'new') {
+      const { fullName, phone, streetAddress, city, state } = checkoutAddress;
+      if (!fullName || !phone || !streetAddress || !city || !state) {
+        toast.error('Fill in all required address fields'); return;
+      }
+      try {
+        const res = await api.post<unknown>('/checkout/address', {
+          fullName,
+          phoneNumber: phone,
+          streetAddress,
+          city,
+          state,
+          zipcode: checkoutAddress.zipcode,
+          isDefault: savedAddresses.length === 0,
+        });
+        const saved = res.data as Record<string, unknown>;
+        shippingAddressId = (saved.id as string) || '';
+      } catch (err) {
+        toast.error(err instanceof ApiError ? err.message : 'Failed to save address');
+        return;
+      }
     }
 
-    const total = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-    toast.success(`Order placed! Total: $${total.toFixed(2)}`);
-    setCart([]);
+    if (!shippingAddressId) { toast.error('Address required'); return; }
+
+    setPlacingOrder(true);
+    try {
+      await api.post('/checkout/place-order', { shippingAddressId });
+      setCart([]);
+      setShowCheckout(false);
+      toast.success('Bulk order placed successfully!');
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to place order');
+    } finally {
+      setPlacingOrder(false);
+    }
   };
 
-  const cartTotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const cartTotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+  const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
 
   return (
     <DashboardLayout role="retailer">
@@ -201,294 +205,225 @@ export default function RetailerBuyBulk() {
             <h1 className="text-3xl font-bold">Buy in Bulk</h1>
             <p className="text-gray-600 mt-1">Browse and order from verified manufacturers</p>
           </div>
-          <div className="relative">
-            <Button 
-              style={{ backgroundColor: '#BE220E' }} 
-              className="text-white"
-              onClick={() => cart.length > 0 && window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
-            >
+          {cartCount > 0 && (
+            <Button className="bg-[#BE220E] hover:bg-[#9a1b0b] relative" onClick={() => setShowCheckout(true)}>
               <ShoppingCart className="w-4 h-4 mr-2" />
               Cart ({cartCount})
             </Button>
-            {cartCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center">
-                {cartCount}
-              </span>
-            )}
-          </div>
+          )}
         </div>
 
         {/* Filters */}
-        <Card className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <Label>Search</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                <Input
-                  placeholder="Search products..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+        <Card className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input placeholder="Search products..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
             </div>
-            <div>
-              <Label>Category</Label>
-              <Select value={filterCategory} onValueChange={setFilterCategory}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Manufacturer</Label>
-              <Select value={filterManufacturer} onValueChange={setFilterManufacturer}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Manufacturers</SelectItem>
-                  {manufacturers.map((mfg) => (
-                    <SelectItem key={mfg} value={mfg}>{mfg}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Sort By</Label>
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="popular">Most Popular</SelectItem>
-                  <SelectItem value="rating">Highest Rated</SelectItem>
-                  <SelectItem value="price-low">Price: Low to High</SelectItem>
-                  <SelectItem value="price-high">Price: High to Low</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger><SelectValue placeholder="All Categories" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="popular">Default</SelectItem>
+                <SelectItem value="price-low">Price: Low to High</SelectItem>
+                <SelectItem value="price-high">Price: High to Low</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </Card>
 
-        {/* Products Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProducts.map((product) => (
-            <Card key={product.id} className="overflow-hidden hover:shadow-lg transition">
-              <img 
-                src={product.image} 
-                alt={product.name}
-                className="w-full h-48 object-cover"
-              />
-              <div className="p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1">
-                    <h3 className="font-bold text-lg mb-1">{product.name}</h3>
-                    <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-                      <Building2 className="w-4 h-4" />
-                      {product.manufacturer}
+        {/* Products */}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-72 rounded-xl" />)}
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <EmptyState icon={Package} title="No bulk products available" description="Manufacturer products for bulk purchase will appear here." />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredProducts.map((product) => (
+              <Card key={product.id} className="overflow-hidden hover:shadow-lg transition">
+                <div className="h-48 bg-gray-100">
+                  {product.image
+                    ? <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                    : <div className="w-full h-full flex items-center justify-center"><ImageIcon className="w-12 h-12 text-gray-300" /></div>}
+                </div>
+                <div className="p-4">
+                  <h3 className="font-bold text-lg mb-1 truncate">{product.name}</h3>
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+                    <Building2 className="w-4 h-4 flex-shrink-0" />
+                    <span className="truncate">{product.manufacturer}</span>
+                  </div>
+                  {product.description && <p className="text-sm text-gray-500 mb-3 line-clamp-2">{product.description}</p>}
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <span className="text-2xl font-bold text-[#BE220E]">₦{product.price.toLocaleString()}</span>
+                      <div className="text-xs text-gray-500">per unit</div>
+                    </div>
+                    <div className="text-right text-sm">
+                      <div className="font-medium">MOQ: {product.moq}</div>
+                      <div className="text-gray-500">{product.stock} in stock</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 text-yellow-500">
-                    <Star className="w-4 h-4 fill-current" />
-                    <span className="text-sm font-medium">{product.rating}</span>
-                  </div>
+                  <Button className="w-full bg-[#BE220E] hover:bg-[#9a1b0b]" onClick={() => { setSelectedProduct(product); setOrderQuantity(String(product.moq)); setShowOrderModal(true); }}>
+                    <ShoppingCart className="w-4 h-4 mr-2" /> Order Now
+                  </Button>
                 </div>
-                
-                <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
-                
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <span className="text-gray-600 text-sm">SKU: </span>
-                    <span className="text-sm font-medium">{product.sku}</span>
-                  </div>
-                  <span className="text-sm px-2 py-1 bg-gray-100 rounded">{product.category}</span>
-                </div>
-
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <div className="text-2xl font-bold" style={{ color: '#BE220E' }}>
-                      ${product.price}
-                    </div>
-                    <div className="text-xs text-gray-600">per unit</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-medium">MOQ: {product.moq}</div>
-                    <div className="text-xs text-gray-600">{product.stock} in stock</div>
-                  </div>
-                </div>
-
-                <Button 
-                  className="w-full" 
-                  style={{ backgroundColor: '#BE220E' }}
-                  onClick={() => {
-                    setSelectedProduct(product);
-                    setOrderQuantity(product.moq.toString());
-                    setShowOrderModal(true);
-                  }}
-                >
-                  <ShoppingCart className="w-4 h-4 mr-2" />
-                  Order Now
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
-
-        {filteredProducts.length === 0 && (
-          <EmptyState
-            icon={Package}
-            title={searchQuery || filterCategory !== 'all' || filterManufacturer !== 'all' ? 'No products match your filters' : 'No bulk products available'}
-            description={searchQuery || filterCategory !== 'all' || filterManufacturer !== 'all' ? 'Try adjusting your search or filters.' : 'Manufacturer products for bulk purchase will appear here.'}
-            action={searchQuery || filterCategory !== 'all' || filterManufacturer !== 'all' ? { label: 'Clear Filters', onClick: () => { setSearchQuery(''); setFilterCategory('all'); setFilterManufacturer('all'); } } : undefined}
-          />
+              </Card>
+            ))}
+          </div>
         )}
 
         {/* Cart Summary */}
         {cart.length > 0 && (
           <Card className="p-6">
-            <h2 className="text-xl font-bold mb-4">Shopping Cart</h2>
+            <h2 className="text-xl font-bold mb-4">Cart Summary</h2>
             <div className="space-y-3 mb-4">
               {cart.map((item) => (
                 <div key={item.product.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-4">
-                    <img 
-                      src={item.product.image} 
-                      alt={item.product.name}
-                      className="w-16 h-16 object-cover rounded"
-                    />
-                    <div>
-                      <div className="font-medium">{item.product.name}</div>
-                      <div className="text-sm text-gray-600">{item.product.manufacturer}</div>
-                      <div className="text-sm text-gray-600">
-                        {item.quantity} units × ${item.product.price}
-                      </div>
-                    </div>
+                  <div>
+                    <div className="font-medium">{item.product.name}</div>
+                    <div className="text-sm text-gray-500">{item.quantity} units × ₦{item.product.price.toLocaleString()}</div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold" style={{ color: '#BE220E' }}>
-                      ${(item.product.price * item.quantity).toFixed(2)}
-                    </div>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => handleRemoveFromCart(item.product.id)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      Remove
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold text-[#BE220E]">₦{(item.product.price * item.quantity).toLocaleString()}</span>
+                    <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50 h-7 w-7 p-0" onClick={() => setCart((p) => p.filter((i) => i.product.id !== item.product.id))}>
+                      <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="border-t pt-4">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xl font-bold">Total</span>
-                <span className="text-3xl font-bold" style={{ color: '#BE220E' }}>
-                  ${cartTotal.toFixed(2)}
-                </span>
+            <div className="border-t pt-4 flex items-center justify-between">
+              <div>
+                <span className="text-gray-600">Total: </span>
+                <span className="text-2xl font-bold text-[#BE220E]">₦{cartTotal.toLocaleString()}</span>
               </div>
               <div className="flex gap-3">
-                <Button 
-                  variant="outline" 
-                  className="flex-1"
-                  onClick={() => setCart([])}
-                >
-                  Clear Cart
-                </Button>
-                <Button 
-                  className="flex-1" 
-                  style={{ backgroundColor: '#BE220E' }}
-                  onClick={handleCheckout}
-                >
-                  Proceed to Checkout
-                </Button>
+                <Button variant="outline" onClick={() => setCart([])}>Clear</Button>
+                <Button className="bg-[#BE220E] hover:bg-[#9a1b0b]" onClick={() => setShowCheckout(true)}>Checkout</Button>
               </div>
             </div>
           </Card>
         )}
       </div>
 
-      {/* Order Modal */}
+      {/* Order Quantity Modal */}
       <Dialog open={showOrderModal} onOpenChange={setShowOrderModal}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Order Product</DialogTitle>
-            <DialogDescription>
-              Enter the quantity you want to order
-            </DialogDescription>
+            <DialogDescription>Enter the quantity you want to order</DialogDescription>
           </DialogHeader>
           {selectedProduct && (
             <div className="space-y-4">
-              <div className="flex gap-4">
-                <img 
-                  src={selectedProduct.image} 
-                  alt={selectedProduct.name}
-                  className="w-32 h-32 object-cover rounded"
-                />
+              <div className="flex gap-3">
+                {selectedProduct.image
+                  ? <img src={selectedProduct.image} alt={selectedProduct.name} className="w-24 h-24 object-cover rounded-lg" />
+                  : <div className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center"><ImageIcon className="w-8 h-8 text-gray-300" /></div>}
                 <div className="flex-1">
-                  <h3 className="font-bold text-lg mb-1">{selectedProduct.name}</h3>
-                  <p className="text-sm text-gray-600 mb-2">{selectedProduct.manufacturer}</p>
-                  <div className="text-2xl font-bold mb-2" style={{ color: '#BE220E' }}>
-                    ${selectedProduct.price} per unit
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    Minimum Order Quantity: {selectedProduct.moq} units
-                  </div>
+                  <h3 className="font-bold mb-1">{selectedProduct.name}</h3>
+                  <p className="text-sm text-gray-500 mb-1">{selectedProduct.manufacturer}</p>
+                  <p className="text-xl font-bold text-[#BE220E]">₦{selectedProduct.price.toLocaleString()} / unit</p>
+                  <p className="text-sm text-gray-500">Min: {selectedProduct.moq} units</p>
                 </div>
               </div>
-              
               <div>
                 <Label>Quantity (units)</Label>
-                <Input
-                  type="number"
-                  placeholder={`Min: ${selectedProduct.moq}`}
-                  value={orderQuantity}
-                  onChange={(e) => setOrderQuantity(e.target.value)}
-                  min={selectedProduct.moq}
-                />
-                <p className="text-sm text-gray-600 mt-1">
-                  Minimum order: {selectedProduct.moq} units
-                </p>
+                <Input type="number" value={orderQuantity} min={selectedProduct.moq} max={selectedProduct.stock} onChange={(e) => setOrderQuantity(e.target.value)} className="mt-1" />
               </div>
-
               {orderQuantity && parseInt(orderQuantity) >= selectedProduct.moq && (
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-gray-600">Unit Price:</span>
-                    <span className="font-medium">${selectedProduct.price}</span>
-                  </div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-gray-600">Quantity:</span>
-                    <span className="font-medium">{orderQuantity} units</span>
-                  </div>
-                  <div className="border-t pt-2 flex items-center justify-between">
-                    <span className="font-bold">Total:</span>
-                    <span className="text-2xl font-bold" style={{ color: '#BE220E' }}>
-                      ${(selectedProduct.price * parseInt(orderQuantity)).toFixed(2)}
-                    </span>
-                  </div>
+                <div className="p-3 bg-gray-50 rounded-lg flex justify-between">
+                  <span className="text-gray-600">Total:</span>
+                  <span className="font-bold text-[#BE220E]">₦{(selectedProduct.price * parseInt(orderQuantity)).toLocaleString()}</span>
                 </div>
               )}
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowOrderModal(false)}>
-              Cancel
-            </Button>
-            <Button 
-              style={{ backgroundColor: '#BE220E' }} 
-              className="text-white"
-              onClick={handleAddToCart}
-            >
-              Add to Cart
+            <Button variant="outline" onClick={() => setShowOrderModal(false)}>Cancel</Button>
+            <Button className="bg-[#BE220E] hover:bg-[#9a1b0b]" onClick={handleAddToCart}>Add to Cart</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Checkout Modal */}
+      <Dialog open={showCheckout} onOpenChange={setShowCheckout}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Checkout</DialogTitle>
+            <DialogDescription>Confirm delivery address for your bulk order</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {/* Order summary */}
+            <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+              {cart.map((i) => (
+                <div key={i.product.id} className="flex justify-between text-sm">
+                  <span>{i.product.name} × {i.quantity}</span>
+                  <span className="font-medium">₦{(i.product.price * i.quantity).toLocaleString()}</span>
+                </div>
+              ))}
+              <div className="border-t pt-2 flex justify-between font-bold">
+                <span>Total</span>
+                <span className="text-[#BE220E]">₦{cartTotal.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Address selection */}
+            {savedAddresses.length > 0 && (
+              <div>
+                <Label>Delivery Address</Label>
+                <Select value={selectedAddressId} onValueChange={setSelectedAddressId}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {savedAddresses.map((a) => <SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>)}
+                    <SelectItem value="new">+ Enter new address</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* New address form */}
+            {(selectedAddressId === 'new' || savedAddresses.length === 0) && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Full Name *</Label>
+                    <Input value={checkoutAddress.fullName} onChange={(e) => setCheckoutAddress({ ...checkoutAddress, fullName: e.target.value })} className="mt-1" />
+                  </div>
+                  <div>
+                    <Label>Phone *</Label>
+                    <Input value={checkoutAddress.phone} onChange={(e) => setCheckoutAddress({ ...checkoutAddress, phone: e.target.value })} className="mt-1" />
+                  </div>
+                </div>
+                <div>
+                  <Label>Street Address *</Label>
+                  <Input value={checkoutAddress.streetAddress} onChange={(e) => setCheckoutAddress({ ...checkoutAddress, streetAddress: e.target.value })} className="mt-1" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>City *</Label>
+                    <Input value={checkoutAddress.city} onChange={(e) => setCheckoutAddress({ ...checkoutAddress, city: e.target.value })} className="mt-1" />
+                  </div>
+                  <div>
+                    <Label>State *</Label>
+                    <Input value={checkoutAddress.state} onChange={(e) => setCheckoutAddress({ ...checkoutAddress, state: e.target.value })} className="mt-1" />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCheckout(false)}>Cancel</Button>
+            <Button className="bg-[#BE220E] hover:bg-[#9a1b0b]" onClick={handlePlaceOrder} disabled={placingOrder}>
+              {placingOrder ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Place Order
             </Button>
           </DialogFooter>
         </DialogContent>

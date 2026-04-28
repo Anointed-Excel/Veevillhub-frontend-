@@ -25,6 +25,7 @@ import {
   Zap,
   Layers,
   RotateCcw,
+  Star,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useCart } from '@/contexts/CartContext';
@@ -61,6 +62,7 @@ export default function DashboardLayout({ children, role }: DashboardLayoutProps
           { icon: ShoppingCart, label: 'Orders', path: '/brand/orders' },
           { icon: Tag, label: 'Promotions', path: '/brand/promotions' },
           { icon: Package, label: 'My Products', path: '/brand/my-products' },
+          { icon: Star, label: 'Reviews', path: '/brand/reviews' },
           { icon: RotateCcw, label: 'Refunds', path: '/brand/refunds' },
           { icon: DollarSign, label: 'Wallet', path: '/brand/wallet' },
           { icon: BarChart3, label: 'Analytics', path: '/brand/analytics' },
