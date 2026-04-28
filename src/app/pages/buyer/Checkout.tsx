@@ -37,7 +37,7 @@ export default function Checkout() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { cartItems, cartTotal, clearCart, cartCount } = useCart();
-  const { fmt } = useCurrency();
+  const { fmt, code: currencyCode, rawRate, convert } = useCurrency();
 
   const [step, setStep] = useState<'address' | 'payment' | 'confirmation'>('address');
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'wallet' | 'transfer' | 'delivery'>('card');
@@ -228,10 +228,17 @@ export default function Checkout() {
       if (paymentMethod === 'card' && orderId) {
         // Initialize Paystack payment
         try {
-          const payRes = await api.post<unknown>('/payments/initialize', {
+          // Pass buyer's selected currency + rate so Paystack charges in local currency
+          const paymentBody: Record<string, unknown> = {
             orderId,
             callback_url: `${window.location.origin}/payment/verify`,
-          });
+          };
+          if (currencyCode !== 'NGN') {
+            paymentBody.currency = currencyCode;
+            paymentBody.exchangeRate = rawRate;
+            paymentBody.amountInCurrency = Math.round(convert(total) * 100) / 100;
+          }
+          const payRes = await api.post<unknown>('/payments/initialize', paymentBody);
           const payData = payRes.data as Record<string, unknown>;
           const authUrl = (payData.authorization_url as string) || (payData.payment_url as string);
           if (authUrl) {
